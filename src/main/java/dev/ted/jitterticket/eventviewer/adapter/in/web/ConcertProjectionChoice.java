@@ -45,14 +45,14 @@ public class ConcertProjectionChoice extends ProjectionChoice {
     }
 
     @Override
-    public List<String> propertiesOfProjectionFrom(List<? extends Event> events) {
+    public ProjectedStateView projectedStateFrom(List<? extends Event> events) {
         @SuppressWarnings("unchecked")
         Concert concert = Concert.reconstitute((List<ConcertEvent>) events);
-        return List.of(
-                "Artist: " + concert.artist(),
-                "Show Time: " + concert.showDateTime(),
-                "Doors Time: " + concert.doorsTime(),
-                "Tickets Remaining: " + concert.availableTicketCount()
+        return ProjectedStateView.ofFields(
+                ProjectedStateView.Field.of("Artist", concert.artist()),
+                ProjectedStateView.Field.of("Show Time", concert.showDateTime()),
+                ProjectedStateView.Field.of("Doors Time", concert.doorsTime()),
+                ProjectedStateView.Field.of("Tickets Remaining", concert.availableTicketCount())
         );
     }
 

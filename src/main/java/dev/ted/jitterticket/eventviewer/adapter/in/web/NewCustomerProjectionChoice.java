@@ -11,7 +11,6 @@ import dev.ted.jitterticket.eventsourced.domain.customer.CustomerId;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 public class NewCustomerProjectionChoice extends ProjectionChoice {
     private final EventStore<CustomerId, CustomerEvent, Customer> customerStore;
@@ -42,35 +41,55 @@ public class NewCustomerProjectionChoice extends ProjectionChoice {
     }
 
     @Override
-    public List<String> propertiesOfProjectionFrom(List<? extends Event> events) {
+    public ProjectedStateView projectedStateFrom(List<? extends Event> events) {
         @SuppressWarnings("unchecked")
         Customer customer = Customer.reconstitute((List<CustomerEvent>) events);
-        return List.of(
-                "Customer Name: " + customer.name(),
-                "Email: " + customer.email(),
-                "Tickets Purchased: " + totalTicketsPurchased(customer.ticketOrders()),
-                "Ticket Orders: " + ticketOrdersAsString(customer.ticketOrders()));
+        List<Customer.TicketOrder> ticketOrders = customer.ticketOrders();
+        return ProjectedStateView
+                .ofFields(
+                        ProjectedStateView.Field.of("Customer Name", customer.name()),
+                        ProjectedStateView.Field.of("Email", customer.email()),
+                        ProjectedStateView.Field.of("Tickets Purchased", totalTicketsPurchased(ticketOrders)),
+                        ProjectedStateView.Field.of("Total Paid", asDollars(totalPaid(ticketOrders))))
+                .plus(ticketOrdersTable(ticketOrders));
     }
 
-    private String totalTicketsPurchased(List<Customer.TicketOrder> ticketOrders) {
-        return String.valueOf(ticketOrders.stream()
-                .mapToInt(Customer.TicketOrder::quantity)
-                .sum());
+    private ProjectedStateView.Table ticketOrdersTable(List<Customer.TicketOrder> ticketOrders) {
+        return new ProjectedStateView.Table(
+                "Ticket Orders",
+                List.of("Concert", "Qty", "Paid"),
+                ticketOrders.stream()
+                            .map(NewCustomerProjectionChoice::asRow)
+                            .toList(),
+                "No ticket orders");
     }
 
-    private String ticketOrdersAsString(List<Customer.TicketOrder> ticketOrders) {
-        if (ticketOrders.isEmpty()) {
-            return "No Ticket Orders";
-        }
+    // the Customer only knows the Concert's ID: the artist name lives in the Concert aggregate
+    private static ProjectedStateView.Row asRow(Customer.TicketOrder order) {
+        return ProjectedStateView.Row.of(
+                abbreviated(order.concertId().id()),
+                order.quantity(),
+                asDollars(order.amountPaid()));
+    }
+
+    // enough of the ID to tell rows apart, without a full UUID dominating the column
+    private static String abbreviated(UUID uuid) {
+        return uuid.toString().substring(0, 8) + "…";
+    }
+
+    private static String asDollars(int amount) {
+        return "$" + amount;
+    }
+
+    private int totalTicketsPurchased(List<Customer.TicketOrder> ticketOrders) {
         return ticketOrders.stream()
-                           .map(this::orderAsString)
-                           .collect(Collectors.joining("\n"));
+                           .mapToInt(Customer.TicketOrder::quantity)
+                           .sum();
     }
 
-    private String orderAsString(Customer.TicketOrder order) {
-        return order.ticketOrderId().toString()
-               + ", " + order.concertId().toString() + ": "
-               + " Quantity = " + order.quantity()
-               + ", Paid: " + order.amountPaid();
+    private int totalPaid(List<Customer.TicketOrder> ticketOrders) {
+        return ticketOrders.stream()
+                           .mapToInt(Customer.TicketOrder::amountPaid)
+                           .sum();
     }
 }

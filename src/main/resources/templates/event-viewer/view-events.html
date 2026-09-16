@@ -142,10 +142,11 @@
 
         .projected-state {
             width: 30%;
-            padding: 2rem;
+            padding: 1.5rem;
             background-color: var(--light-bg);
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow-y: auto; /* a Customer can have hundreds of ticket orders */
         }
 
         .back-link {
@@ -163,15 +164,68 @@
         }
 
         .state-item {
-            margin-bottom: 15px;
-        }
-
-        .state-item > div {
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             padding: 8px;
             background-color: white;
             border-radius: 4px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            line-height: 1.4;
+        }
+
+        .state-item strong {
+            font-weight: 600;
+        }
+
+        .state-item span {
+            color: var(--secondary-color);
+        }
+
+        .state-table {
+            margin-top: 1.5rem;
+        }
+
+        .state-table h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .state-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .state-table th,
+        .state-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .state-table th {
+            text-align: left;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--secondary-color);
+        }
+
+        /* first column identifies the row, the rest are numbers */
+        .state-table th:not(:first-child),
+        .state-table td:not(:first-child) {
+            text-align: right;
+        }
+
+        .state-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .state-table .empty-message {
+            color: var(--secondary-color);
+            font-style: italic;
         }
 
         .event-field {
@@ -316,17 +370,35 @@
 
         <div class="projected-state">
             <h3>Projected State</h3>
-            <div th:each="stateItem : ${projectedState}" class="state-item">
-                <div th:text="${stateItem}">Artist: Sonic Waves</div>
-                <div th:remove="all">
-                    Show Time: 2025-08-02T21:00
-                </div>
-                <div th:remove="all">
-                    Doors Time: 20:00
-                </div>
-                <div th:remove="all">
-                    Tickets Remaining: 83
-                </div>
+            <div th:each="field : ${projectedState.fields()}" class="state-item">
+                <strong th:text="${field.name()}">Artist</strong>:
+                <span th:text="${field.value()}">Sonic Waves</span>
+            </div>
+            <div th:remove="all" class="state-item">
+                <strong>Show Time</strong>: <span>2025-08-02T21:00</span>
+            </div>
+
+            <div th:each="table : ${projectedState.tables()}" class="state-table">
+                <h4 th:text="${table.title()}">Ticket Orders</h4>
+                <table th:unless="${table.isEmpty()}">
+                    <thead>
+                    <tr>
+                        <th th:each="header : ${table.headers()}" th:text="${header}">Concert</th>
+                        <th th:remove="all">Qty</th>
+                        <th th:remove="all">Paid</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${table.rows()}">
+                        <td th:each="cell : ${row.cells()}" th:text="${cell}">af05fc05…</td>
+                        <td th:remove="all">4</td>
+                        <td th:remove="all">$240</td>
+                    </tr>
+                    </tbody>
+                </table>
+                <p th:if="${table.isEmpty()}"
+                   th:text="${table.emptyMessage()}"
+                   class="empty-message">No ticket orders</p>
             </div>
         </div>
 

@@ -19,7 +19,7 @@ public abstract class ProjectionChoice {
 
     public abstract List<? extends Event> eventsFor(UUID uuid);
 
-    public abstract List<String> propertiesOfProjectionFrom(List<? extends Event> events);
+    public abstract ProjectedStateView projectedStateFrom(List<? extends Event> events);
 
     public String aggregateName() {
         return aggregateName;

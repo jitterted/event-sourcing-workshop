@@ -119,13 +119,17 @@ class EventViewerControllerTest {
                 .hasOnlyElementsOfType(EventView.class)
                 .hasSize(fixture.concertEvents.size());
 
-        assertThat(model)
-                .extracting("projectedState", InstanceOfAssertFactories.list(String.class))
-                .containsExactly("Artist: " + fixture.concert().artist(),
-                                 "Show Time: " + fixture.concert().showDateTime(),
-                                 "Doors Time: " + fixture.concert().doorsTime(),
-                                 "Tickets Remaining: " + fixture.concert().availableTicketCount()
+        ProjectedStateView projectedState = (ProjectedStateView) model.getAttribute("projectedState");
+        assertThat(projectedState.fields())
+                .containsExactly(
+                        new ProjectedStateView.Field("Artist", fixture.concert().artist()),
+                        new ProjectedStateView.Field("Show Time", String.valueOf(fixture.concert().showDateTime())),
+                        new ProjectedStateView.Field("Doors Time", String.valueOf(fixture.concert().doorsTime())),
+                        new ProjectedStateView.Field("Tickets Remaining", String.valueOf(fixture.concert().availableTicketCount()))
                 );
+        assertThat(projectedState.tables())
+                .as("Concerts have no repeating data to show in a table")
+                .isEmpty();
     }
 
     @Test

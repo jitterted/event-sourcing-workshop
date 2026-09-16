@@ -5,7 +5,7 @@ import dev.ted.jitterticket.eventsourced.domain.TicketOrderId;
 import dev.ted.jitterticket.eventsourced.domain.concert.Concert;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15,7 +15,8 @@ public class Customer extends EventSourcedAggregate<CustomerEvent, CustomerId> {
 
     private String name;
     private String email;
-    private final Map<TicketOrderId, TicketOrder> ticketOrdersByTicketOrderId = new HashMap<>();
+    // LinkedHashMap so ticketOrders() comes back in purchase order, instead of TicketOrderId hash order
+    private final Map<TicketOrderId, TicketOrder> ticketOrdersByTicketOrderId = new LinkedHashMap<>();
 
     //region Creation Command
     public static Customer register(CustomerId customerId, String name, String email) {

@@ -25,7 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "DataFlowIssue"})
 class EventViewerControllerTest {
 
     @Test

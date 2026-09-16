@@ -31,7 +31,6 @@ class EventViewerControllerTest {
     @Test
     void listProjectionChoicesShowsAvailableProjections() {
         var concertStore = InMemoryEventStore.forConcerts();
-        var customerStore = InMemoryEventStore.forCustomers();
         ProjectionChoice projectionChoice = new ConcertProjectionChoice(concertStore, createConcertProjectionCoordinator(concertStore));
         EventViewerController controller = new EventViewerController(
                 new ProjectionChoices(Map.of("concerts", projectionChoice)));
@@ -62,10 +61,9 @@ class EventViewerControllerTest {
     }
 
     private static EventViewerController createEventViewerController(EventStore<ConcertId, ConcertEvent, Concert> concertStore) {
-        EventViewerController controller = new EventViewerController(
+        return new EventViewerController(
                 new ProjectionChoices(Map.of(
                         "concerts", new ConcertProjectionChoice(concertStore, createConcertProjectionCoordinator(concertStore)))));
-        return controller;
     }
 
     private static ProjectionCoordinator<ConcertEvent, AvailableConcerts, AvailableConcertsDelta> createConcertProjectionCoordinator(EventStore<ConcertId, ConcertEvent, Concert> concertStore) {
@@ -119,7 +117,10 @@ class EventViewerControllerTest {
                 .hasOnlyElementsOfType(EventView.class)
                 .hasSize(fixture.concertEvents.size());
 
+        assertThat(model)
+                .containsKey("projectedState");
         ProjectedStateView projectedState = (ProjectedStateView) model.getAttribute("projectedState");
+
         assertThat(projectedState.fields())
                 .containsExactly(
                         new ProjectedStateView.Field("Artist", fixture.concert().artist()),

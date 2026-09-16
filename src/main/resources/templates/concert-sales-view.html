@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <link rel="stylesheet" type="text/css" href="../static/site.css" th:href="@{/site.css}">
+    <title>Concert Sales Report</title>
+</head>
+<body>
+<h1>Concert Sales Report</h1>
+<table>
+    <thead>
+    <tr>
+        <th>Concert ID</th>
+        <th>Artist</th>
+        <th>Date</th>
+        <th>Number of Tickets Sold</th>
+        <th>Total Sales</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="salesSummaryView : ${salesSummaryViews}">
+        <td th:text="${salesSummaryView.concertId}">af05fc05-2de1-46d8-9568-01381029feb7</td>
+        <td th:text="${salesSummaryView.artist}">Jittery Pigs</td>
+        <td th:text="${salesSummaryView.showDate}">August 3, 2025</td>
+        <td class="numeric-column" th:text="${salesSummaryView.ticketsSold}">512</td>
+        <td class="numeric-column" th:text="${salesSummaryView.totalSales}">$4096</td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>

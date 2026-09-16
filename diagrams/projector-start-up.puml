@@ -1,0 +1,41 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+control SpringAppConfig
+boundary MvcController
+participant ConcertSalesProjector
+database ConcertEventStore
+database ProjectionRepository
+database ConcertSalesProjectionRepository
+
+== Initialization ==
+
+SpringAppConfig -> ConcertEventStore: create new
+activate ConcertEventStore
+ConcertEventStore --> SpringAppConfig: eventStore
+SpringAppConfig -> ConcertSalesProjector: Projector.create(eventStore,\nconcertSalesProjectionRepository,\nprojectionRepository)
+activate ConcertSalesProjector
+ConcertSalesProjector -> ProjectionRepository: findLastGlobalEventSequenceFor(projectionId)
+ProjectionRepository --> ConcertSalesProjector: lastGlobalEventSequence (if it's not there, insert row with 0)
+ConcertSalesProjector -> ConcertEventStore: subscribe(projector, lastGlobalEventSequence)
+
+== Viewing the Projection ==
+
+MvcController -> ConcertSalesProjector: allProjectedSummaries()
+ConcertSalesProjector -> ProjectionRepository: findLastGlobalEventSequenceFor(projectionId)
+ProjectionRepository --> ConcertSalesProjector: lastGlobalEventSequence
+ConcertSalesProjector -> ConcertSalesProjectionRepository: load Projection
+ConcertSalesProjectionRepository --> ConcertSalesProjector: Projection
+ConcertSalesProjector -> ConcertEventStore: allEventsAfter(globalEventSequence)
+alt if new events were loaded from event store
+    ConcertEventStore --> ConcertSalesProjector: Stream<Event>
+    ConcertSalesProjector -> ConcertSalesProjector: apply(Stream<Event>)
+    ConcertSalesProjector -> ConcertSalesProjectionRepository: save Projection
+    ConcertSalesProjector -> ProjectionRepository: save lastGlobalEventSequence
+end
+
+ConcertSalesProjector --> MvcController: List<ProjectedSummaries>
+
+@enduml

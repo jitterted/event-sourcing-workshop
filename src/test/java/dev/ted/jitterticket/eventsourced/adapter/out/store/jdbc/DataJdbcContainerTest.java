@@ -1,0 +1,60 @@
+package dev.ted.jitterticket.eventsourced.adapter.out.store.jdbc;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jdbc.test.autoconfigure.DataJdbcTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+@Tag("db")
+@DataJdbcTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+public abstract class DataJdbcContainerTest {
+
+    protected static final int DB_EVENT_SEQUENCE_START = 42;
+    @ServiceConnection
+    static PostgreSQLContainer postgres;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    static {
+        postgres = new PostgreSQLContainer("postgres:17.6")
+                .withReuse(true);
+        // manually start instead of using @Container
+        postgres.start();
+    }
+
+    @BeforeAll
+    public static void truncateAll(@Autowired JdbcTemplate jdbcTemplate) {
+        jdbcTemplate.execute("""
+            DO $$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+                END LOOP;
+            END $$;
+        """);
+    }
+
+    @BeforeEach
+    public void restartSequence() {
+        jdbcTemplate.execute("""
+            DO $$
+            DECLARE
+                seq_name text;
+            BEGIN
+                SELECT pg_get_serial_sequence('events', 'event_sequence') INTO seq_name;
+                IF seq_name IS NOT NULL THEN
+                    EXECUTE 'ALTER SEQUENCE ' || seq_name || ' RESTART WITH %s';
+                END IF;
+            END $$;
+        """.formatted(DB_EVENT_SEQUENCE_START)
+        );
+    }
+}

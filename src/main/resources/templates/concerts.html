@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <title>Concerts On Sale</title>
+    <link rel="stylesheet" th:href="@{/site.css}">
+</head>
+<body>
+<h1>On-Sale Events</h1>
+<table>
+    <thead>
+    <tr>
+        <th>Concert ID</th>
+        <th>Artist</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Ticket Price</th>
+        <th>Action</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="concert : ${concerts}">
+        <td th:text="${concert.concertId}">af05fc05-2de1-46d8-9568-01381029feb7</td>
+        <td th:text="${concert.artist}">Jittery Pigs</td>
+        <td th:text="${concert.showDate}">August 3, 2025</td>
+        <td th:text="${concert.showTime}">8:00 PM</td>
+        <td th:text="${concert.ticketPrice}">$38</td>
+        <td><a href="#" th:href="@{/concerts/{id}(id=${concert.concertId})}">Buy Tickets</a>
+            <br/>
+            <a href="#" th:href="@{/reschedule/{id}(id=${concert.concertId})}">Reschedule Concert</a></td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>

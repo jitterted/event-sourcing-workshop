@@ -1,0 +1,664 @@
+Wednesday, May 13, 2026
+=======================
+
+Need to add a way for the (new) ProjectionCoordinator to handle idempotency for events, there are two potential issues:
+
+   1. Double-handled events, i.e., receiving an event that's already been processed by the projector --> should discard before the Projector sees it
+   2. "Gap problem": Projector already processed event 2, but missed event 1, and can't just handle event 1 to fix it, events must be processed in order.
+      Need to prevent this from happening, or mark the projection as needing to be recalculated from scratch if it does happen.
+
+
+Tuesday, May 12, 2026
+=====================
+
+Never mind! I had already decided that the ProjectionPersistencePort is responsible for loading (new) Domain Projectors into memory, pre-loaded with their persisted cache (if any): ProjectionPersistencePort.loadProjector() does this.
+
+    Now that (new) DomainProjectors are responsible for their own cache, we need a way to load a snapshotted (persisted) projector before it's passed into the (new) ProjectionCoordinator.
+    It's possible to create an EMPTY DomainProjector, but it must not be possible to create a DomainProjector with state, unless the Checkpoint is not the INITIAL (aka 0) checkpoint, i.e., it MUST have processed at least ONE event in order to have any non-empty state.
+    Since we are always (except for tests) loading a snapshot from persistence, which may be empty, we should make it the default to always load it during startup (which might be implemented in Spring's @Configuration code).
+
+    OR?
+
+    The (new) ProjectionCoordinator instantiates the DomainProjector with its persisted (snapshotted) cache?
+
+        OR
+
+        DomainProjector has a .heresYourCache(snapshot) method that is called from the ProjectionCoordinator's constructor (i.e., during Startup).
+
+Wednesday, April 15, 2026
+=========================
+
+With the responsibility of the "checkpoint" moved into the Domain Projector (checkpoint is the last event sequence processed by the projector), then the Projection Coordinator's remaining responsibility at runtime (vs. startup) is persistence.
+And since persistence is just a method on a PersistencePort, there's not much left for the Coordinator to do at runtime, meaning that it's not useful as a separate class.
+
+
+Tuesday, April 7, 2026
+======================
+The NewProjectionCoordinator's responsibility is to deal with persistence: loading any existing projection state and persisting any changes after executing the NewDomainProjector.
+
+Since the NewDomainProjector _is_ stateful, it is an in-memory cache of the projection, so NewProjectionCoordinator should _not_ cache the projection separately.
+The cached checkpoint is now also the responsibility of the NewDomainProjector, and it updates the checkpoint at the end of each individual handle() method.
+Alas, it means duplicate code to update that checkpoint in each granular handle() method.
+
+
+Monday, April 6, 2026
+=====================
+
+Problem: we want Projectors to be Event Consumers, and therefore implement one or more `handle(SpecificEvent event)` methods to advertise the events that it's interested in handling.
+
+However: we currently wrap Domain Projectors with the ProjectionCoordinator, and the coordinator implements Event Consumer, but that means the ProjectionCoordinator has to implement the `handle()` methods in order to advertise the events the Domain Projector is interested in, but that defeats the entire purpose of the coordinator being a generic infrastructure-based wrapper.
+
+1. ProjectionCoordinator goes away, the Domain Projector becomes just Projector, where infra stuff gets injected, and implements the Event Consumer and any handle() methods
+2. NewEventConsumer becomes EventHandler, which DomainProjector implements and exposes desired events via handle() methods.
+   AND
+   EventConsumer handles a Stream<? extends Event>
+   AND
+   When the ProjectionCoordinator subscribes to the EventStore, it asks the DomainProjector for `handledEventTypes` and passes that to the EventStore
+   SO
+   We can register an EventHandler directly with the EventStore, which will request the handledEventTypes()
+   OR
+   Register an EventConsumer, which requires a separate parameter for the handled (desired) events
+
+Monday, March 30, 2026
+======================
+[Design]
+* Optimizing catch-up event retrieval for specific events when starting up, because projections and processors may be bogged down by retrieving lots of events that they then ignore. For example, the ConcertStartedProcessor always has to catch-up during start-up (because the alarm settings are not persisted), but does not care about TicketsSold events (which would be the majority of events when the application is running).
+    * Need a new method on EventStore that accepts one or more event types to filter
+        Stream<EVENT> allEventsAfter(Checkpoint checkpoint, EVENT... events);
+        * NOTE: we might want to optimize for not sending irrelevant events to Processors/Projections, but since ignored events don't cost us much time, we can do this at some later point.
+    * ProjectionCoordinator needs a way to find out which event(s) the DomainProjector is interested in, so adding a query method to the DomainProjector asking it for those events is one way
+
+* New EventConsumer design
+    * [X] handle events (does this)
+    * [ ] subscribe to the event store for specific events it handles
+    * [ ] catch-up on events by asking the event store for specific events after the checkpoint
+    therefore, need a CatchUpEventConsumer where given an EventStore:
+        * Does catch-up via EventStore.allEventsAfter()
+        * Subscribes via EventStore.subscribe()
+    then
+        * DomainProjector gets the initial cache loaded by the ProjectionCoordinator, is responsible for maintaining that cache (including the Checkpoint/LastEventSequenceSeen for the cache, i.e., the last event processed and stored in the cache)
+            - the ProjectionCoordinator can call projector.handle() and then projector.changes() either returns changes since the last handle, or returns empty
+            => OR, the ProjectionCoordinator simply goes away and we inject the EventStore and PersistencePort into the Projector itself,
+              with the abstract base class CatchUpEventConsumer deals with catching up on persisted events and subscribing to the EventStore for new events
+        * Processor: needs catch-up and then subscribe
+
+* Open Question: is it better to have a "persistence wrapper" (like ProjectionCoordinator) to deal with persisting the projection, allowing the Projector to just do the event-based calculations, or have a ProjectionPersister that is injected into the Projector and the projector reads/writes to persistence as needed.
+
+
+
+Thursday, February 5, 2026
+==========================
+[Design Decision]
+* Initially thought the "Concert Sold Out" would be handled by a separate Processor. However, tracking ticket sales and comparing that against concert capacity inside the Processor feels redundant, since the Concert already knows precisely when it has sold out, i.e., when sellTicketsTo() is invoked, and therefore is in the best position to detect being sold out and emit (enqueue) the TicketSalesStopped event on its own.
+
+
+Wednesday, February 4, 2026
+===========================
+* Moving the constant for EMPTY_AVAILABLE_CONCERTS from the test to the record itself, so it becomes AvailableConcerts.EMPTY
+
+[IntelliJ IDEA]
+* Why didn't generate equals/hashcode reference superclass properties (concertId and eventSequence) for the new TicketSalesStopped event?
+
+[Concert Aggregate: Adding TicketSalesStopped]
+* Does the Concert aggregate hold state about tickets being available, which would be "updated" by application of the TicketSalesStopped event? For now, no. The aggregate doesn't make any decisions based on that information. HOWEVER, if ticket sales were stopped, then any attempt to execute the sellTicketsTo() method MUST fail. (And is this a boolean, or the start of a state machine cycle? Booleans tend to become multi-state choices and/or timestamps.)
+
+[Look Into]
+* Should the mixins used in EventDto.createObjectMapper() extend in a parallel hierarchy (e.g., TicketSalesStoppedMixin extends ConcertMixin)? Is that already handled by the ObjectMapper implicitly (e.g., because ConcertMixin is already defined)?
+
+* Is there a way to create a custom postfix that does an un-arg, i.e., remove a method call leaving its parameter behind, e.g., remove the List.copyOf from:
+    List.copyOf(availableConcertsMap.values())
+
+    to
+
+    availableConcertsMap.values()
+
+[Create New Event Tool]
+* Use Junie to create a code-generator tool for adding new events, handling not just the creation of the event and adding it to the sealed-permits, but also updating the EventDto and EventDtoTest for the JSON round-trip conversion. Make sure to add @SuppressWarnings("unused") for the generated Mixin class.
+
+[IntelliJ IDEA]
+* Sticky lines don't help when the parameter list is across multiple lines (it only shows the first line)
+
+# Stream Wrap-up
+
+(Confused, puzzled, problem)
+*
+
+(Tried, what worked, what didn't)
+
+(Takeaways)
+
+
+Thursday, January 15, 2026
+==========================
+[IntelliJ IDEA BUG]
+* Extract method disabled "make static" option and it's always on!!
+
+[Design Decision]
+* Instead of figuring out how to deal with time going by for the Available Concerts Projector (which has all sorts of implications, such as dealing with a concert that was scheduled to happen in the past, but was then rescheduled to a future date), we will rely on a "ConcertCompleted" event to "close the books" on that concert. We'll assume that the Venue Manager clicks a button on some UI to mark that concert as completed, and then we'll remove it from the projection.
+
+
+Tuesday, January 13, 2026
+=========================
+* Handling events that come in while the projection is catching-up:
+
+    1. Block (synchronize) with the handle() so that the event-store calling the handle() is blocked until we're done catching up.
+       Needs the event store to call each event consumer's handle() with its own (virtual) thread.
+    2. Subscribe immediately, any calls to handle() are buffered until the catch-up is complete, and then process the buffered events.
+    3. Don't make this server (service) available until all projections have caught up (reduces server availability).
+
+  For now, not worrying about this possibility, and subscribe once the projection is caught up.
+
+                 cachedCheckpoint | persisted checkpoint
+                 -----------------+---------------------
+handle(es = 1)   0                | 0 -> 1
+handle(es = 2)   0                | 1 -> 2
+handle(empty)    0                | 2 -> 0 (no events processed)
+or irrelevant event with sequence = 3:
+handle(es = 3)   0                | 2 -> 3 (we still "see" es=3)
+
+Monday, January 12, 2026
+========================
+* Notes about how we could "lose" an event if a transaction takes a bit longer than ones started later, as well as how we could get gaps in the sequence used for events:
+
+    [-99---X] rollback
+     [-100---------] Concert 1 scheduled
+      [-101--] Concert 2 scheduled
+       [-102--] Concert 1 rescheduled
+
+    handle(101) => checkpoint = 101
+    --5 ms-
+    handle(102) => huh? reschedule non-existent concert
+    --30 ms--
+    handle(100) => discard, lower than checkpoint(101)
+    --250 ms--
+    process buffered events
+
+    concertStore.load(Concert1): 100, 102
+
+Thursday, January 8, 2026
+=========================
+Notes from obsolete tests in ConcertSalesProjectionMediatorTest:
+    * Different ways to do event-based tests:
+        (1) Granular:
+             create stores
+             create+save concert
+             create+save customer
+             concert.sellTicketsTo: customer, qty
+             save concert
+        (2) Setup using PurchaseTicketsUseCase
+             create stores
+             create (schedule) Concert
+             create (register) Customer
+             create PTUC
+             execute PTUC.purchaseTickets
+        (3) Use manually created events
+             create stores
+             store ConcertScheduled event
+             store CustomerRegistered event (optional)
+             store TicketsSold event (*required*)
+             store TicketsPurchased event (optional)
+
+    * Different assertion comparison methods:
+                   var actualMap = concertSalesProjector
+                           .allSalesSummaries()
+                           .collect(Collectors.toMap(ConcertSalesProjector.ConcertSalesSummary::artist, Function.identity()));
+                   var expectedMap = Map.of(expectedSummary1.artist(), expectedSummary1,
+                                            expectedSummary2.artist(), expectedSummary2);
+                   assertThat(actualMap)
+                           .usingRecursiveComparison()
+                           .isEqualTo(expectedMap);
+
+        List comparison highlights mismatched fields, but uses [0] and [1] to reference elements, which is potentially unhelpful with longer lists
+                   List<ConcertSalesProjector.ConcertSalesSummary> actualList =
+                           concertSalesProjector.allSalesSummaries()
+                                                .sorted(Comparator.comparing(summary -> summary.concertId().id()))
+                                                .toList();
+                   List<ConcertSalesProjector.ConcertSalesSummary> expectedList =
+                           Stream.of(expectedSummary2, expectedSummary1)
+                                 .sorted(Comparator.comparing(summary -> summary.concertId().id()))
+                                 .toList();
+
+                   assertThat(actualList)
+                           .usingRecursiveComparison()
+                           .isEqualTo(expectedList);
+
+        unhelpful assertion failure output
+                   assertThat(concertSalesProjector.allSalesSummaries())
+                           .usingRecursiveFieldByFieldElementComparator()
+                           .containsExactly(expectedSummary1, expectedSummary2);
+
+
+Monday, January 5, 2026
+=======================
+[Design Thinking]
+* Needed for all Projectors
+    * All have the Mediator's handle(Stream<EVENT>)
+    * All track the last event sequence seen (checkpoint), but this looks hard to generalize right now
+* Specific to each Projector's purpose/data
+    * Which specific events they care about (optional)
+    * How the projection is persisted
+    * How the projection is computed
+* So: extract an interface for the `handle(Stream<EVENT> eventStream)` method and have the BaseEventStore call that method for each subscriber
+
+[AssertJ Issue?]
+* AssertionError for expecting value of an AtomicInteger is currently not readable:
+    ```
+    Expecting AtomicInteger(1) to have value:
+      2
+    but did not.
+    ```
+  Because at first I didn't see the `1` inside the parens.
+  Would prefer similar output to comparing primitives and/or making the "show differences" link in IntelliJ IDEA show up.
+
+
+Thursday, January 1, 2026
+=========================
+[Design Decision]
+* Revisiting original design decision (May 27, 2025) around one table for all events vs. table-per-aggregate type.
+  The original decision, one table per aggregate type, seems the best as there's no apparent downsides.
+  I never implemented it that way and now we see performance problems in pathological data layout, i.e.,
+  when there's 100,000 Concert events followed by 100,000 Customer events and the Projector only cares about the Concert events, yet we retrieve the 100,000 Customer events only to throw them away.
+
+  Alternative to Table-Per-Aggregate
+
+  Always do queries that provide the list of event types you're interested in.
+  Advantages:
+    * More flexible queries, e.g., projections (and other event consumers) can state explicitly the events that they care about, saving time retrieving events that would be ignored.
+    * No need to update the DDL schema to create the new table for new Aggregates
+
+  Complications:
+    * For Aggregate reconstitution:
+
+      1. Need to specify ALL of the events that are needed to reconstitute the aggregate, stored in a constant lookup table.
+         This table would need to be updated any time there are new events added for an aggregate.
+         Potential for mistake: not updating the table when new events are added.
+         Compensated by having a test to ensure all concrete event types are in that Aggregate-To-Events lookup table.
+      2a. Have a separate column for the aggregate type, which is somewhat wasteful and makes the query a bit more complicated.
+      2b. Prepend the aggregate type to the ID, e.g., CU-{UUID} and CO-{UUID}, and then the AggregateRootId type, it could be serialized into a single string (CU-{UUID} for a Customer-type Event), or could split it into two strings, "Customer" and "UUID" for expansion in the WHERE clause.
+
+  DECISION
+
+  => Keep a single table, with the existing schema, and always require queries for events to specify the concrete event types to be retrieved.
+
+Thursday, December 18, 2025
+===========================
+[IntelliJ IDEA]
+[ ] Feature? Be able to find @Disabled tests just like we can find TODOs, given its own special window, just like "Find in Files" can be opened in a tab/window. Limited to Test code (scope) would help a lot.
+
+
+Thursday, December 11, 2025
+===========================
+
+* Learned that Spring Data (JDBC) needs find + by as prefix/suffix for derived query names, e.g., `findAllOrderByEventSequenceAsc` won't work, because it's missing the `By` after `findAll`
+
+[IntelliJ IDEA]
+* Incorrectly displayed (misleading) two compile errors: an int that should be a long, and an event that should be a generic EVENT, but only the int<->long was a problem.
+
+
+Wednesday, December 10, 2025
+============================
+[IntelliJ IDEA]
+    [ ] confusing dialog: when attempting to Safe Delete a single parameter from a method that comes from an interface, the dialog(s) were very confusing in terms of what would actually be deleted
+
+
+Monday, December 8, 2025
+========================
+
+[IntelliJ IDEA]
+    [ ] bug: when doing a CMD+B (go to usage) from a static creation method in a production class to a SINGLE usage in another class (test) when the window is split into two, the caret does not move to the other pane. Works fine if not split.
+
+[Design Decision]
+
+* We have been storing the Global Event Sequence in the EventDto only for the sake of the InMemoryEventStore and the CsvStringsEventStore--the JdbcEventStore does not need it as filtering to return events after a GES is done in the database query.
+    * Therefore, we can remove the GES from the EventDto and change:
+        * InMemoryEventStore: duplicate the event storage to store in a List, which would be treated as append-only, and then the GES = Index + 1 (e.g., if the item is list[3] that is GES 4, since GES is 1-based)
+        * CsvStringsEventStore: do the filtering (dropping) of events in the reading of the CSV, before mapping to EventDto, e.g., stringsReaderAppender
+                    .readAllLines()
+                    .dropWhile(line.split(","...) where the column holding the GES > requestedGES)
+                    .map(this::csvToEventDto);
+
+
+Thursday, December 4, 2025
+==========================
+[IntelliJ IDEA]
+    [ ] Presentation Assistant doesn't display the shortcut for dialogs until after the dialog goes away, e.g., Ctrl+Shift+V
+
+[Design Decision]
+  For persisting the concertSalesProjectionMediator' state...
+     Current candidate design target:
+       * generic persistence, just stores/loads some convenient serialized format
+       * pluggable persisters, e.g., custom schema in DB or JSON or YAML (not!) or S3 blob
+      List<ConcertSalesSummary> summaries = Projections.load("concert sales", ConcertSalesSummary.class)
+
+     Other ideas:
+         * Or, one custom projection handler per projector:
+              ConcertSalesSummaryProjection.allSummaries()
+                -> new ConcertSalesSummaryProjection(concertSalesSummaryProjector)
+
+         * This won't work because the Projector has no state (it's a function)
+             ConcertSalesProjector projector = Pants.projectorFor("concert sales")
+             List<ConcertSalesSummary> summaries = projector.allSummaries()
+
+Wednesday, December 3, 2025
+===========================
+[Design Decision]
+* We do the "catch up" of the projection when it's instantiated (instead of lazily when `allSalesSummaries()` is invoked) so that the projected data is immediately available in the database, in case we want to use that as an integration point.
+
+
+Tuesday, December 2, 2025
+=========================
+[IntelliJ IDEA]
+    [ ] Moving of the JUnit MethodSource from inside the same nested class to the outer class does not rename the method name inside the MethodSource annotation
+    [ ] Inspection for the situation after manually moving the method source supplier outside the nested class should suggest making it fully qualified, e.g. "concertEventStoreSupplier" -> "dev.ted.jitterticket.eventsourced.application.EventStoreTest#concertEventStoreSupplier"
+
+Wednesday, November 19, 2025
+============================
+[IntelliJ IDEA]
+    [ ] When extracting a base (super) class, would be nice to "drag" the class's annotations along with it
+
+    [ ] When expanding selection, it should be aware of region/endregion sections
+
+[Spring Data]
+    * When IDs are supplied by the client, need to add Persistable implementation (with @Transient isNew and @PersistenceCreator) so that Spring Data knows when to do an INSERT vs. an UPDATE
+       * If the IDs are generated in the database, this isn't needed, as Spring Data knows any object without an ID is always new
+
+
+Monday, November 17, 2025
+=========================
+
+[JUnit]
+* Would like to use ParameterizedClass for the nested test classes in EventStoreTest, but because the parameters are stored in fields, the same values are (re)used by all test methods, which doesn't work when I want new ("clean") in-memory event stores for each test *method*.
+
+[Adding Global Event Sequence]
+* Event objects need two creation methods:
+    1. Creating a new event that will be stored (created by the Aggregate)
+    2. Reconstituting the event from persistence (created by the EventStore)
+  Otherwise when events are newly created, we have to remember to pass in "null" for the global sequence, which is mistake-prone and unnecessary
+
+
+Tuesday, May 27, 2025
+=====================
+[Design Decision]
+* Storing events for all aggregates in a single CSV file means that when reading them inside an event-specific store, we need to filter out those events that don't match the Store's event type (e.g., CustomerEvent).
+  Solutions:
+  1. Each store gets its own file (e.g., "customer-events.csv" and "concert-events.csv")
+  2. Add a column in the CSV to indicate the event type (e.g., "ConcertEvent"), and then match that to the store's `eventClass` field (already defined)
+  Decision: #1, as it required fewer changes and less data in the file
+
+[IntelliJ IDEA Bug]
+[ ] When it suggests an introduce variable refactoring, the keyboard focus isn't on the dropdown (for "Replace ...")
+    Example code:
+    ```
+            var concertStore = CsvStringsEventStore.forConcerts(
+                    new CsvReaderAppender(Path.of(eventsFilePath)));
+            if (Files.exists(Path.of(eventsFilePath))) {
+                return concertStore;
+            }
+    ```
+
+[IntelliJ IDEA Feature Request]
+[ ] When converting from an "if..else with instanceof" to a switch, it puts in the `null,default` case even if it's not necessary (due to sealed base class).
+    Example:
+    ```
+    protected void apply(CustomerEvent customerEvent) {
+        if (customerEvent instanceof CustomerRegistered registered) {
+            setId(registered.customerId());
+            this.name = registered.customerName();
+            this.email = registered.email();
+        } else if (customerEvent instanceof TicketsPurchased purchased) {
+            TicketOrder ticketOrder = new TicketOrder(
+                    purchased.ticketOrderId(), purchased.concertId(), purchased.quantity(), purchased.paidAmount());
+            ticketOrdersByTicketOrderId.put(purchased.ticketOrderId(), ticketOrder);
+        }
+    }
+    ```
+    becomes:
+    ```
+    switch (customerEvent) {
+        case CustomerRegistered registered -> {
+            setId(registered.customerId());
+            this.name = registered.customerName();
+            this.email = registered.email();
+        }
+        case TicketsPurchased purchased -> {
+            TicketOrder ticketOrder = new TicketOrder(
+                    purchased.ticketOrderId(), purchased.concertId(), purchased.quantity(), purchased.paidAmount());
+            ticketOrdersByTicketOrderId.put(purchased.ticketOrderId(), ticketOrder);
+        }
+        case null, default -> {
+        }
+    }
+    ```
+    but the last case is not needed. (This might be hard!)
+
+[Design Decision]
+* When storing events in a relational database, there doesn't seem to be any benefit to trying to store all aggregates in a single table? Storing aggregate events in their own table seems more straightforward, and (eventually) would be more performant.
+  So, will have separate tables for each aggregate type (and therefore EventStore)
+
+Wednesday, May 21, 2025
+=======================
+
+[JUnit Feedback]
+[ ] Is there a way to use @ParameterizedClass such that it supplies a new instance of the argument(s) for each individual test method? So instead of writing the same @ParameterizedTest+@MethodSource for each test method, I can specify it once for the whole class? (See EventStoreTest for an example.)
+
+[IntelliJ IDEA Feedback]
+[ ] (1:10pm) When extracting delegate, it leaves behind methods that are no longer used.
+    See CsvFileEventStore when delegating the csvLines to a new class.
+
+
+Thursday, May 1, 2025
+=====================
+[AI Assistant]
+[ ] When typing a prompt inline, (accidentally?) hitting the up/down arrow throws away what was typed, replacing it with the history!
+
+
+Wednesday, April 30, 2025
+=========================
+* Once again, found an incorrect URL during manual testing, which means I probably want to move the URL generation to the back-end to make it easier to test
+
+
+Tuesday, April 29, 2025
+=======================
+
+[IntelliJ IDEA Bug/Missing Feature?]
+* Viewing Parameter Info on a Record Deconstruction Pattern in a switch block doesn't show anything
+* When refactoring to Migrate Type in a Record component (property), it did not migrate the type in the switch pattern deconstruction for those records (e.g., Long eventSequence to Integer)
+* Type migration of List<EVENT> to Stream<EVENT> messed up the tests that were using concrete types, so it changed List<ConcertEvent> to Stream<EVENT>!
+
+
+Monday, April 28, 2025
+======================
+
+[Design Decision]
+* Where to update/increment the EVENT SEQUENCE Number?
+    1. Update it on-the-fly during storage in the EventStore
+        This would be annoying, because Events are Records, so would have to create a new record, copying over most of the information, with the new record having the correct sequence. This would be difficult, because each Event record is different, so each Event would need a "wither" for updating the sequence.
+    ✅2. Increment/track it in the EventSourcedAggregate:
+        This is probably the place to do it, since the aggregate can retain the "high water mark" of event sequence numbers and hand them out when the events are created by the Aggregate.
+    => It's very annoying to use Records for the event objects themselves, because we can't easily update the event sequence number (nor the aggregate ID), so have to have those numbers/IDs at the time the aggregate creates & enqueues the events. If they were classes, the base EventSourcedAggregate could assign those values.
+
+[Design Decision]
+* Need to store a Concert from its events (for testing, when I need to be explicit about the events, e.g., in the test `projectsStateOnlyThroughSelectedEvent`), but if we want to create/store from events, we either need to:
+    1. Create an alternate way of instantiating the Concert from events so they also get enqueued (to end up in the uncommittedEvents list), otherwise the EventStore can't save it (reconstituted Concerts have no uncommitted events), or
+    2. Add a method to EventStore that takes the list of events directly, instead of from the Aggregate.
+  (1) is painful because creating an alternate constructor that enqueues and doesn't just apply is very awkward (because there's already a constructor that takes a list of events—HOWEVER, we could change the constructor to be a no-arg constructor and do the apply() in the static reconstitute method). In addition, we're creating the Concert aggregate, but only using it as a container for the uncommitted events, so it's a bit of a waste to apply the events when we don't care about the state of Concert.
+  (2) is more straightforward and allows us to be explicit about the events without creating a "throwaway" Concert object.
+
+
+[IntelliJ IDEA Bug? 11:15am]
+[ ] When introducing a variable for `concertWithEvents.concert()` in the following code:
+
+    ```java
+    model.addAttribute("projectedState", List.of(
+                    "Artist: " + concertWithEvents.concert().artist(),
+                    "Show Time: " + concertWithEvents.concert().showDateTime(),
+                    "Doors Time: " + concertWithEvents.concert().doorsTime(),
+                    "Tickets Remaining: " + concertWithEvents.concert().availableTicketCount()));
+    ```
+
+    it does not offer to name the variable, it just creates `concert` as the name and completes.
+
+
+Thursday, April 24, 2025
+========================
+
+* When using `Model` in a test, we can't (as easily) assert on its contents, but when declaring the variable as a `ConcurrentModel`, which extends ConcurrentHashMap, AssertJ treats it as a Map, which is more convenient.
+
+
+Wednesday, April 23, 2025
+=========================
+
+[Junie]
+[ ] "Start again" implies that it will _start_, when really it's "edit the prompt".
+
+[IntelliJ IDEA Bug]
+[ ] Renamed a Thymeleaf template in a subdirectory and when it renamed it in the controller method's return value (view name), it dropped the subdirectory name: "event-viewer/concerts" became "concert-aggregates", which breaks the app.
+
+[ ] If a method is @Deprecated, but is completely unused, would be nice if it showed that method as unused (grayed out)
+
+[ ] When adding a (currently unused) field as a parameter to the constructor, it should bring up the "Change Signature" refactoring so we can do the change safely
+
+Tuesday, April 22, 2025
+=======================
+
+[IntelliJ IDEA]
+[ ] Multi-caret (Ctrl-G) no more occurrences not displaying?
+
+
+Monday, April 21, 2025
+======================
+
+Next Time: generate TicketOrder with an ID that is used for the "ticket purchase confirmation" screen for the Customer
+
+[Caution]
+* Still easy to mix up newly created Aggregates: reconstituted from events (which results in empty uncommittedEvents) vs. registered via command (which results in a single event in uncommittedEvents), the latter which is required for saving.
+  Unsure how to better protect against these kinds of mistakes: perhaps a createForTestWithEmptyUncommittedEvents() method on Customer (or whatever Aggregate)?
+
+[IntelliJ IDEA: Feature]
+[ ] Ability to exclude a replacement from the replace dialog (it's available in the replace tool window, so why not the dialog?)
+
+[IntelliJ IDEA Bug]
+[ ] Can't seem to use the Make Static refactoring on an extracted test setup helper method. Check to see if it's still broken in 2025.1. Check if issue was already filed?
+
+[IntelliJ IDEA: Feature]
+[ ] When moving (static) methods, would like to be able to move to a new static nested class (right now it tries to create a new package)
+
+[IntelliJ IDEA: Bug?]
+[X] Getting error trying to launch JUnit in 2025.1 release.
+
+
+Monday, April 14, 2025
+======================
+
+[X] Next Time: tests against the purchaseTicketsUseCase that verify that uncommitted events from both Concert and Customer are generated
+
+
+[Event-Sourcing]
+* Concert can only generate ConcertEvents, and Customer can only generate CustomerEvents, so I can't assert (through ConcertTest) that the uncommitted events from Concert.purchaseTickets() generates a Customer-oriented TicketsPurchased event
+
+
+Wednesday, April 9, 2025
+========================
+
+[Design Decision]
+* For buying tickets, we don't think we need to load the Customer Aggregate, because Concert will generate the "TicketsReceived" event on the Customer's behalf
+
+    * To display the ticket order confirmation, we load the Customer,
+      then ask the Customer for the TicketOrder associated with the TicketOrderId
+
+[IntelliJ IDEA Bug]
+* F6 Move: when the method isn't static, it prompts to make static and THEN move, so makes it static, but then does NOT continue with the move operation
+
+[Junie]
+* What's the problem with the (default) IntelliJ Light theme that it complains about?
+
+  > Current theme IntelliJ Light may not be supported by Junie. If you encounter any issues, please change to a default theme and reopen the project.
+
+
+Tuesday, April 8, 2025
+======================
+
+[Junie]
+* (reminder to post feedback on tests that fail that aren't Junie's fault, i.e., they weren't passing before)
+
+[IntelliJ IDEA]
+* Recognize in a Thymeleaf HTML template that the input field _does_ have a label, but the "for" is a TH: variable (see buy-tickets.html's form)
+
+
+Monday, April 7, 2025
+=====================
+
+[Spring Framework]
+* MockMvcTester without any Spring configuration will use the default InternalResourceViewResolver, which prevents "dispatch loops" that don't actually make sense for the resolver (Thymeleaf) we use in production, but it's too painful to manually wire the ThymeleafResolver. Perhaps can configure the UrlBasedViewResolver which doesn't care about dispatch loops?
+
+[Heuristic]
+* Projected read-models should have all the information needed to render a customer/user-facing view
+
+* Following from the heuristic above, for ease of conversion we're adding the Aggregate's IDs to the event objects themselves instead of pulling them from the "wrapper/envelope" EventDto that already has the Aggregate's ID.
+  Later on we can do more work in EventDto, since the DTO already has the ID, when converting from the DTO back into the event via enrichment (and not store the ID in the JSON blob), but that's an optimization: not having duplicate information in the JSON that's already in the event record/row.
+
+
+Thursday, April 3, 2025
+=======================
+
+Next Time: Modify ConcertProjector so that it has all the details needed to render the list of concerts available for a customer to buy a ticket for, which means adding additional fields to the projector
+
+
+[Design]
+* {per @Suigi} To start, we'll create an in-memory Projector that always loops over all existing events in order to derive the information it needs to provide (e.g., which concerts are in the future and have tickets remaining)
+
+    * All EventStore instances (we need a separate instance per Aggregate type) eventually share a single EventDto-Repository (through which all events will flow on their way to a database), which could provide a single place for Projectors to tap into (and could specify the event types they're interested in).
+
+* Learned a lot about generics in making EventStore generic
+
+[Junie Issue: Fixed]
+* When asking a question (instead of having it do work), the answers ended up in a markdown file instead of in its chat area.
+
+
+Wednesday, April 2, 2025
+========================
+
+Next Time: Deal with "find all concerts that we can buy tickets for" in the BuyTicketsUseCase
+
+[Decision]
+* Aggregates now have IDs that are of type UUIDv7 instead of Long, because we can't rely on the database to generate IDs as there's not a 1:1 relationship between rows/records in a table and the Aggregate Entities.
+  IDs will be assigned upon the first creation event for each domain aggregate.
+  Using type 7 UUIDs as they can be time-ordered, which is probably useful for events (since they must be correctly ordered).
+
+* Interesting issues while generifying the ConcertStore: was able to get most of the way there, but the reconstitution of the object (e.g., Concert) needs to be externalized by a factory-like/functional method that takes the Events and converts them to the AGGREGATE
+
+* For easier understanding, create two stores: one specific (without Generics) to a type (e.g., CustomerStore), and then one that is generified, e.g., Store<...> (which is where ConcertStore is heading)
+
+
+Tuesday, April 1, 2025
+======================
+
+* Thought about pushing up to the base class, the apply-loop over events in the concrete subclass,
+  but then we're running the apply method inside the super-constructor, which may cause issues
+  (which may be "fixed" with the upcoming "flexible constructor bodies" JEP?)
+
+* Instead of using switch+pattern matching for apply(), create dedicated (overloaded) apply methods for each concrete event type, however the dispatching of the events based on their concrete type would require either reflection or use of a switch anyway
+
+[Alternative Implementation]
+* Instead of a Use Case in the Application package, make self-contained Command objects that get executed by the boundary adapter
+
+
+Monday, March 31, 2025
+======================
+
+* Two ways to create a Concert Aggregate Root:
+
+  1. schedule (static factory method) -- could also be a separate Factory class, if we need more control (passing in dependencies to the aggregate root)
+
+  2. reconstitute (apply events from the event store)
+
+[Junie]
+* When I asked it to add parameters to the Concert constructor, it did stuff and then wanted to run the ConcertTest to ensure everything is working. HOWEVER, it didn't check that this test was failing before and its changes might not have been enough to get it to pass—which would not have been Junie's fault!
+
+[Junie]
+* How to more easily reference line(s) of code in a specific file (e.g., a specific test method) when asking Junie to do something
+
+[IntelliJ IDEA]
+* Didn't offer to select the entire switch statement when doing Extract Method
+
+* In "Commands Generate Events" tests, the SETUP creates events and uses reconstitute (does not itself call Commands)

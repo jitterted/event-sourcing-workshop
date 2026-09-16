@@ -1,0 +1,324 @@
+# Simplifying Assumptions
+
+    * Ticket purchases don't require payment information (payments "always succeed")
+    * Little contention for tickets (no waiting room)
+    * No Auth (supply your own CustomerID!)
+
+# To Do
+
+===>> CURRENT TASK:
+
+[ ] Store concertSalesProjectionMediator as tables in the database via incremental (per-event) updates
+    [ ] Incremental updates to concertSalesProjectionMediator as events are emitted/persisted
+        [ ] Create new projector that updates only via events directly received, e.g., projector.apply(uncommittedEvents):
+                ConcertSales=
+                ConcertId, Artist, Date, Tickets Sold, Total Sales
+            [ ] Store updated information in-memory
+                [X] Scheduled -> put new value for key in map
+                [X] TicketsSold -> update value with new SOLD (+= qty) and new SALES (+= paidAmount) for key in map
+                [X] Rescheduled -> update value with new show date+time in map
+                [X] Load the information into memory upon creation (constructor)
+                    [X] implement .apply(), which applies and updates in-memory map
+                    [X] in constructor, call apply() with allEvents() from the event store
+                [X] Invert relationship between projector and eventStore:
+                    [X] Projector registers with EventStore, which (only for in-memory projectors) immediately calls back to apply all events in the store
+                [ ] In the Projector, ensure idempotency by storing the last event sequence when applying the event
+                    [ ] Skip past "seen" events
+                    [ ] Warn/error if we see a gap in the event sequence during apply: that means we missed something
+            [X] Wire up projector so we can see it in the UI
+
+            [X] Store updated information in the projector's own database table
+                [X] As part of subscribe (aka register), ask the event store for all events since the last one we saw (uses Global Event Sequence)
+                    [X] Add table for projection+last GES
+                    [X] Add table for sales projection
+                    [X] JDBC repository for concert_sales_projection
+                    [X] JDBC repository for concertSalesProjectionMediator
+                    [X] Load existing projection from database
+                        [X] Add a specific query to get the GES directly as a Long instead of returning the db entity
+                    [X] Detour: refactor projector into DB infra + domain projection (the apply())
+                        [X] ConcertSalesProjector must be I/O-free as it is living in the Domain (or at least should be!), which means the project() method should accept and return ConcertSalesSummary object and not DB-specific ConcertSalesProjection objects
+                        [X] EventStore needs allEventsAfter(globalEventSequence)
+                            [X] Memory
+                            [X] CSV
+                            [X] JDBC
+                        [X] Catch up for new Projector in ProjectionUpdater's constructor
+                        [ ] ? Convert test delegation in the JdbcEventStoreTest to abstract base class?
+                    [X] EventStore#save() returns last/highest/max global event sequence number as a result of the save
+                    [X] EventStore#subscribe(projector, lastGES)
+                    [X] Combine tests from ConcertSalesProjectorDatabaseTest into ProjectionsTest
+                    [X] Update Beans and SalesController to use ConcertSalesProjectionMediator instead of ConcertSalesProjector
+                    [X] Clean up any other @Deprecated methods
+
+                [X] Replace "local" (per-aggregate) event sequence with the global sequence (DB/Store-generated)
+                    [X] Stop using event_sequence in JDBC queries (fix tests)
+                    [X] Replace client-side generated event_sequence with DB-generated BIGSERIAL
+                        [X] change primary key
+                [X] Mediator work...
+                    [X] Mediator.handle(events, lastGlobalEventSequence)
+                    [X] Test EventStore calls Mediator upon store.save()
+                    [X] Clean up I/O-related classes from ConcertSalesProjector, e.g., it shouldn't be handed Projection (DB) objects, instead convert to ConcertSalesSummary, and it should return updated ConcertSalesSummary objects
+                        [X] Rename ConcertSalesProjection to ConcertSalesSummaryDbo?
+                [X] Ensure EventDto is correct in terms of EventSequence as a field, which isn't assigned until we write to the database, so the DTO can't have the sequence as part of the "payload" JSON and it should only be in the metadata for the payload.
+                [ ] Scheduled -> INSERT new row in (database) table, fill sales with zeroes
+                [ ] TicketsSold -> SELECT existing SOLD & SALES, then UPDATE new SOLD (+= qty) and new SALES (+= paidAmount)
+                [ ] Rescheduled -> UPDATE data for ConcertId
+
+            [ ] Change the EventViewerController to use the correct range for selectedEvent, since they're no longer starting at 1, and _may_ have gaps (This SEEMS to work OK?)
+                [ ] Add paging for when we have LOTS of events
+
+            [X] BaseEventStore needs to handle more than 1 subscriber
+            [ ] Convert ConcertSummaryProjector and RegisteredCustomersProjector to be similar to ConcertSalesProjector
+                [X] Make more general way of registering projectors
+                    [X] Generalize projectors to extract an interface
+                [X] Convert RegisteredCustomersProjector to use new interface
+                [X] Convert ConcertSummaryProjector to use interface
+                [ ] Redesign Projector startup to move retrieval of last-seen global event sequence and subscribing to the event store to Spring configuration (e.g., TixConfiguration) so that it fetches the info and subscribes the projector to the event store(s)
+
+    [ ] Convert Registered Customers projector to use new generic design
+        REFACTOR:
+            [X] Rename CustomerSummary -> RegisteredCustomer
+            [X] Wrap List<RegisteredCustomer> inside of RegisteredCustomers
+            [ ] Split into DomainProjector<CustomerEvent, RegisteredCustomers> implementation and ProjectionMediator that doesn't yet use a Port: takes EventStore, DomainProjector, Executor
+                [X] Implement stateless project()
+                [X] Define ProjectionCoordinator concrete class
+                [X] Extract stateful code to ProjectionCoordinator
+                [X] Have Spring config use the new ProjectionCoordinator instead of RegisteredCustomersProjector
+                [X] Remove obsolete code from RegisteredCustomersProjector
+            [X] Don't forget to clean up the $OldStuff in ConcertSalesProjectionTest
+        NEW BEHAVIOR->PERSISTING PROJECTION
+            [X] Create ProjectionPort<STATE> interface with Snapshot record
+            [X] RegisteredCustomersPort implements ProjectionPort<RegisteredCustomers>
+            [X] Test-drive Memory-based Port implementation
+            [X] Update ProjectionCoordinator constructor to accept the ProjectionPort<RegisteredCustomers>
+            [X] Update constructor and handle()/processEvents() implementation to flush updates
+
+    [X] Make the `suigi-separate-global...` branch as `main` branch
+
+    [X] Convert Available Concerts projector to new design
+        [X] Rename to AvailableConcerts
+        [X] Repeat similar steps from Registered Customers conversion
+
+    [X] Add new functionality to the AvailableConcertsProjection:
+        [X] New event to stop ticket sales: TicketSalesStopped.
+        [X] When TicketSalesStopped received, remove that Concert from the projection.
+
+    [ ] Concert Sold Out scenario
+        [X] Add "stopTicketSales()" for Concert
+            [X] Add state for "canSellTickets", starts at "true", flips to "false" when TicketSalesStopped is applied
+            [ ] Concert sellTicketsTo() validation: must fail if canSellTickets is false.
+        [ ] Listens for tickets sold, when sales = capacity, load the Concert aggregate and invoke "stopTicketSales()"
+            [ ] Implements EventConsumer<ConcertEvent>
+            [ ] Does the Processor separately track a Concert's ticket sales vs. capacity
+                vs.
+                Retrieve the Concert aggregate to find out whether ticket sales == max capacity
+
+    [X] Concert Started Processor
+        Emits TicketSalesStopped event when a Concert's show time has passed: When ConcertScheduled event received, sets an "alarm" for the show time to "wake up" and emit the event
+        [X] Consume ConcertScheduled: schedule future task given a LocalDateTime (use now().until(event.ShowDateTime)), where the Runnable is: self-invoke (on Processor) a method (wakeUp()) that calls stopTicketSalesUseCase.stopSalesFor(event.ConcertId) and removes from internal Map
+        (Internally hold Map<ConcertId, ScheduledFuture<?>> so we can cancel and schedule upon ConcertRescheduled, or cancel if TicketSalesStopped, or cancel if we ever implement a ConcertCanceled event)
+        [X] Given new Processor,
+            When ConcertScheduled event received by handle()
+            Then it's in the list of Alarms
+        [X] Test that AlarmScheduler (some kind of interface for a ScheduledExecutorService, e.g., ForkJoinPool.commonPool() that we can replace with a Test Double) was invoked with show date+time for ConcertId
+            [X] And that the scheduled future was canceled when the TicketSalesStopped event was handled
+            [X] Create a Runnable (task) that invokes stopSales on the specified Concert
+                [X] Requires a StopTicketSalesUseCase (aka Command) that does the infrastructure work of loading the Concert, executing .stopTicketSales() and saves the uncommitted events
+                    [X] Create a composition-friendly class that takes a lambda to execute a method on an aggregate, e.g., new CommandExecuterFactory<Concert>(Runnable<Concert> doStuff), where the Factory already has the reference to the ConcertEventStore
+
+            [X] Add Reschedule command support to the CommandExecutorFactory so that we can send in data and then hook it up to a UI
+                [X] Create UI for this: Controller and HTML
+
+            [X] Extend the CommandExecutorFactory to a "creator" command for use with scheduling a new concert
+                [X] Create a wrapForCreation() that doesn't execute the "before" or "load" code, only the "after" or "save"
+                [X] Add creating the schedule command in Commands
+
+
+    [ ] Schedule Concert UI
+        [X] Thymeleaf page and Controller
+        [X] Projection for scheduled concerts to prevent booking conflicts
+            [X] List of ConcertId, ShowDate (no Time needed)
+            [no] There's a missing ConcertCompleted event that would have this projection remove concerts that have already taken place (i.e., are now in the past)
+
+            -- Evicting Concerts from ScheduledConcertsProjection --
+            1. Processor that generates a "close concert" alarm for midnight after the concert is scheduled (like ConcertStartedProcessor), and the alarm triggers the "concert.close()" command method
+            2. Automation that at midnight executes a query+command: query for concerts scheduled "yesterday" (since midnight is the beginning of a new day) and for each concert scheduled (either 0 or 1), calls concert.close() <-- automating what a user could do manually
+            3. "External" clock event every midnight that we somehow handle and that does the query+command from #2
+            4. When a new "ConcertScheduled" event is handled by the ScheduledConcertsProjection, it evicts any concert in the projection that are older than the current date (Clock would need to be injected, or could "cheat" and look at the execution date in the ConcertScheduled event)
+            5. (Manually) rebuild the projection if/when it gets too large
+
+            [never-mind] Create a __Generator automation that generates ConcertCalendarDayEnded events at midnight
+                [ ] while (thread not interrupted): {
+                    sleep_until_midnight
+                    concertStore.save(
+                [ ] ScheduledConcerts projection will drop any concerts that are older than the date from that event:
+                    e.g., if a concert's show date was 2024-03-30, and we receive a ConcertCalendarDayEnded event with 2024-03-30, then that concert would be removed from the projection (so less-than-or-equal-to ended-day)
+        [X] Rules
+            [X] Must not conflict with already scheduled concert, information comes from a [Future]ScheduledConcerts projection
+                [X] Add this validation to Reschedule
+            [X] Doors time must be between 30 minutes and two hours prior to show time
+                [ ] Optional: Must be in the future by at least N days (14?)
+
+        [X] NewEventConsumer needs to "advertise" which events it needs to handle
+            [X] Drop 'EVENT' generic from the DomainProjector definition
+            [X] Reimplement Registered Customers using NewDomainProjector and EventHandler
+            [X] in EventStore: Fix generics + varargs issue by using Set<Class<? extends Event>> instead of Class<? extends Event>...
+
+            [X] Add BaseEventStore.subscribe(EventConsumer, Set<Event> desiredEvents)
+                e.g.: eventStore.subscribe(this, projector.handledEventTypes());
+            [ ] Add BaseEventStore.subscribe(EventHandler)
+                The event store can ask the EventHandler which methods it's interested in.
+
+==> CURRENT TASK ==>
+
+    [X] Align all STATE return values to use Checkpointed<STATE>
+        [X] Rename CheckpointedState<STATE> -> Checkpointed<STATE>
+        [X] Get rid of the Persistence Port's Snapshot as it's a dupe of Checkpointed
+            [X] Migrate SnapshotAssert
+        [X] Change NewDomainProjector.projection() to return Checkpoint<FullState> (i.e., STATE generic type)
+        [X] Add checkpoint() back, so that (at least) we can determine consistency lag in metrics (how big is the difference of Checkpoint values between the Projector and the EventStore)
+
+    [X] Added ProjectionPersistencePort loadProjector() that returns generic NewDomainProjector<STATE, DELTA extends ProjectionDelta> with cache loaded
+
+    [X] Change signature of saveDelta() to take Checkpointed<DELTA> as the parameter (Parameter Object!)
+
+    [ ] ASSERTJ: How to make the CheckpointedAssert's state().isEqualTo() be aware of the STATE generic type (right now it becomes Object)
+
+
+
+    [ ] New feature: schedule when tickets go on sale
+        [ ] Optimize projections to only retrieve relevant events
+            [X] EventStore supports specifying events of interest
+            [ ] Processor
+
+        [ ] This means AvailableConcerts (Projection: rename to ConcertsOnSale) would no longer have scheduled concerts until their tickets go on sale, while scheduled concerts WOULD be listed in the ScheduledConcertsProjection since that projection is for scheduling conflicts (only)
+
+    [ ] Convert ConcertStartedProcessor to use the EventHandler so desired events can be detected for configuration in the ProcessorConfiguration class instead of manually configuring them as I do at ProcessorConfiguration.java:39
+
+    [ ] Add business date and time (datetime) properties to events when command is executed
+        [ ] Surface the created_at column into the event?
+
+    [ ] Convert ConcertFactory to test data builder
+
+    [X] Figure out where the code to create an executable command object (e.g., what's currently in the RescheduleConcertController.rescheduleConcert() method) goes and how that gets injected into the controller
+
+    [ ] Have an easier way to recreate the sample data, instead of having to delete the Postgres container (maybe a button?)
+
+    [ ] Auto-complete Concert Processor
+        [ ] Extract a ProcessorCoordinator, or refactor the ProjectionCoordinator to work with any Event Consumer (and therefore becomes an EventConsumerCoordinator?)
+        [ ] Tracks when concerts should be marked as completed, and sets itself an alarm of some type (or externalizes it to some scheduler), and then generates a ConcertCompleted event.
+        [ ] Concert then can handle the ConcertCompleted event to do other work (to be defined)
+
+    [ ] Actually persist the projections in the database, i.e., implement the PersistencePort interface(s):
+        [ ] AvailableConcerts
+        [ ] RegisteredCustomers
+
+    [X] Event Viewer for Concerts needs to use a complete list of Concert aggregates, and NOT the Available Concerts projection, because of the TicketSalesStopped event (which drops concerts where ticket sales stopped).
+        [X] Create a new AllConcertAggregates projection.
+        [X] Event Viewer uses this new projection
+
+
+    [X] Upgrade to Spring Boot 4.0.3
+
+    [ ] Create a targeted "Decider" for ticket sales, that validates that the ticket sales have not been stopped and we have enough to fulfill the requested ticket quantity. Ticket sales are currently stopped as a result of the ConcertStartedProcessor, and ticket sales should be stopped when we sell the last ticket.
+
+    [ ] (Later) Generify CommandExecutorFactory to handle other aggregates (Customer)
+
+    [ ] Convert ConcertSalesProjection+Mediator to Coordinator design
+
+    [ ] Add the Concert Sales projection as a choice for viewing with the event viewer
+
+    [ ] Add ability to delete customers, probably via a `CustomerDeleted` event
+        [ ] Update how the projector handles deletions
+    [ ] Add ability to cancel concerts, via `ConcertCanceled` event
+        [ ] Requires Tickets to be refunded (opposite of purchased)
+            [ ] Sales projector would need to handle this? or just drop the row from the projection when canceled?
+        [ ] Projector would need to be updated
+
+    [ ] Fix title containing <span> in list-aggregates.html
+
+    [ ] Implement the constraint that Customer email addresses must be unique: ? do we need a special read-model/projection for that ?
+    [ ] Reduce verbosity of tests by creating minimal DSL for setup AND for assertion
+    [ ] Expand SnapshotAssert to also have assertions for the Delta
+
+    [X] Do some performance/benchmarks for 100 concerts, where each concert sells tickets to 10,000 Customers, overall generating 1MM events
+    [X] Configure TestContainer tests to reuse the same container to speed up tests
+
+    [no] Try out Avro (vs. JSON) for encoding event payloads in the Events table in Postgres. Faster?
+        [ ] New database table + schema (Avro as binary column)
+        [ ] New EventDto to represent the table row
+        [ ] BaseEventStore implementation (similar to JdbcEventStore)
+
+
+    [ ] ArchUnit rule to ensure that only test code calls `createForTest...` methods
+    [later with modulith] Figure out listener/subscription for when events are persisted
+
+[X] Time-travel event viewer
+    [X] Show all Concerts, select a specific one to see its event stream history
+        [X] In reverse chronological (event) order
+    [X] Show state of the Aggregate
+    [X] Show state as of a specific ("selected"?) event - defaults to most recent
+        [X] Add selected event ID to the show events URL as a Query Param
+        [X] Clicking on an event moves the "current" pointer to that event
+        [X] Create a sublist of the events up to (and including) the selected event, then reconstitute the aggregate from the sublist
+    [X] Improve layout of events in the event list
+
+    [X] Generalize to events for any Aggregate type for a specific Agg ID
+        [X] Generalize show[Concert]Events to showEvents for any type
+            [X] Use functions to transform an idString to a List<Event>
+            [X] Create summary projector for Customer aggregates
+            [X] Use the selected projection type for selecting the functions (see comments)
+            [X] Generalize the event viewer template
+        [X] Create a map of projection (aggregate) type to ProjectionChoice, and pass that into the controller
+        [X] Need a function that provides a list of available concertSalesProjectionMediator (aggregates) to view, i.e., generalize the listConcerts() endpoint that uses concertSummaryProjector.allConcertSummaries()
+        [X] Add concrete ProjectionChoice implementations for Customer aggregate and Concert Summary projection
+            [X] Wrap the Map into ProjectionChoices class
+        [-] Clean up "aggregate name" to be "projection name"
+
+[X] Convert Events from Record to Class
+
+[X] File Persistence!
+    [X] Reorganize code
+        [X] move core of findById() up to Base class, relying on the eventsForAggregate method instead of directly pulling events from the map
+        [X] generalize and push up eventsForAggregate
+    [X] Add in file I/O for CSV event store
+        [X] Create interface for reading/appending
+        [X] Create file-based implementation: translate IOException to RuntimeException
+            [X] Expanded CsvEventStore tests to test across ArrayList and File reader/appender implementations
+        [X] Plug in file-based implementation into the CsvFileEventStore
+
+[X] Fix up the if+instanceof to switch
+
+[X] Database Persistence using 1 Table for all Aggregate types (vs. 1 table for each aggregate type)
+    [X] SQL to create the table(s)
+    [X] Docker compose config to start up local postgres container
+    [X] Testcontainer setup for postgres
+    [X] Create DatabaseEventStore implementation using BaseEventStore
+        [X] Create static methods: forConcerts, forCustomers
+        [X] Implement allEvents()
+        [X] Implement eventDtosFor(ID)
+        [X] Implement save(ID, Stream<EVENT>)
+
+[ ] Variant: implement delegation (composition) oriented version of EventStore instead of subclassing?
+
+[X] Clean up ConcertSummaryProjector (remove concertWithEventsThrough()).
+
+[X] EventSourcedAggregate.uncommittedEvents() returns the internal mutable list! At least return a copy (preferably an unmodifiable List, or perhaps just a Stream)
+
+[X] Check the EventDtoTest to ensure it's finding all of the concrete (record) events for the "parameterized" test
+
+[X] Rename buy/bought to purchase/purchased
+
+* concert.purchaseTickets() needs to generate two (3?) events
+    [ ] 1. [Concert aggregate stream] TicketsSold(concertId, customerId, ...)
+        [ ] (DEFER until we need it for the Concert Sales projector.)
+            Implement the total paid (dollar amount) -- would be used for a projection of concert total sales
+    [X] 2. [Customer aggregate stream] TicketsPurchased(customerId, concertId, ticketOrderId??...)
+    ?? (don't think I need this) [Customer aggregate stream for orders] TicketsOrdered(...purchaseId)
+
+[X] Add TicketOrderId to the TicketPurchased event (was concert.purchaseTickets() needs to return the TicketOrderId)
+
+[X] Complete the customer purchase confirmation screen
+    [X] Redirect (after POST to purchase tickets) to new endpoint:
+    [X] New endpoint for /customers/{customerId}/confirmations/{ticketOrderId}
+        [X] Load Customer, Load Concert => TicketOrderView
+

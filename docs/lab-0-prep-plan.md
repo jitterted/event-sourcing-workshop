@@ -1,134 +1,121 @@
-# Lab 0 Prep — Build the "Before" (Snapshot-Persisted Concert)
+# Lab 0 Prep — Round 2 (align Lab 0 with LO3)
 
-*Event Sourcing Workshop · JitterTicket · prep for the "Delete the Snapshot" guided exercise (LO3)*
+*Event Sourcing Workshop · JitterTicket · prep remaining after the `orm` package was built*
 
-## Goal
+Round 1 is **done and archived**: [archive/lab-0-prep-plan-v1-completed.md](archive/lab-0-prep-plan-v1-completed.md). It produced the working "before" — the snapshot-persisted [`dev.ted.jitterticket.orm`](../src/main/java/dev/ted/jitterticket/orm/) package, green round-trip tests, and the two SQL props in `docs/lab0/`.
 
-Lab 0 is a guided reading/strike-through demo of **LO3 — Event Sourcing simplifies DDD implementation**, targeting the **"back-door state access"** clause: persistence forcing the aggregate to expose its whole internal state (`snapshot()` out, `new Concert(snapshot)` in) purely so the database can save it.
+This round closes the gap between what Lab 0 actually shows and the **LO3 atoms** in [knowledge-map.md](knowledge-map.md), and adds the third version of `Concert`.
 
-The live codebase is *already* event-sourced, so there is nothing to delete. This prep creates a **working "before"** — a snapshot/DBO-persisted `Concert` with **no event sourcing in it** — to show side-by-side against the real (ES) `Concert`, which stays untouched as the "after."
+## The shape Lab 0 now takes
 
-## Strategy: an isolated package, not an in-place edit
+Three versions of `Concert`, shown in two separate sittings:
 
-Add a self-contained package `dev.ted.jitterticket.orm`. **Do not** convert the real `domain/concert/Concert.java` — the whole app (event store generics, projectors, processors, `PurchaseTicketsUseCase`, controllers) depends on the ES `Concert`, so stripping ES out of it in place would break compilation and you'd no longer have a *working* before.
+| # | Version | Where | When |
+|---|---|---|---|
+| 1 | **ORM** — snapshot round-trip, back doors | `dev.ted.jitterticket.orm` | Lab 0 opener (15–20 min) |
+| 2 | **ES aggregate** — events + `apply()` fold | `eventsourced.domain.concert.Concert` (real code, untouched) | Lab 0 opener |
+| 3 | **Pure ES, non-aggregate** — a `decide` function, no object holding state | new isolated package (see B1) | Lead-in to **Lab 2**, not the opener |
 
-- **After** (the reveal): `dev.ted.jitterticket.eventsourced.domain.concert.Concert` — leave exactly as-is.
-- **Before** (this prep): `dev.ted.jitterticket.orm.*` — compiles and runs on its own, imports nothing from `…eventsourced`.
+Splitting 3 off keeps the opener tight and gives Lab 2's DCB material a running start.
 
-Demoed behavior: `rescheduleTo(...)` (mutates two fields) plus `stopTicketSales()` (flips a flag) — both exist on the real `Concert`, so the later ES conversion maps 1:1.
+**The behavior all three implement: `sellTicketsTo(customerId, quantity)`,** with one rule — *quantity must not exceed the tickets available*. It's the cleanest illustration of the distinction that drives this round:
 
-**Design conventions used below** (matching the real codebase's style):
-- `Concert.Snapshot` is a **nested record** inside `Concert` (like `Customer.TicketOrder`) — it's Concert's own state shape, and nesting concentrates all the snapshot plumbing in one file so the strike-through is more visceral.
-- `ConcertDbo` is a **dumb bag of data** (a `record`). It knows nothing about how to build or extract a `Concert`.
-- The **repository owns both directions of the mapping** — extraction (`snapshot()`) in `save`, reconstruction (`new Concert(snapshot)`) in `findById` — so both back-door call sites sit together at the persistence boundary.
+> **A query method that serves the domain or the UI is not a back door.** `artist()` and `showDateTime()` exist because a screen needs them. `availableTicketCount` is different: it's internal state that a *decision* reads, and nothing outside needs to see it. Event sourcing lets it stay completely private. ORM persistence drags it out through `snapshot()` whether you expose a query method or not.
 
----
-
-## What to ADD
-
-New files under `src/main/java/dev/ted/jitterticket/orm/` (+ one test).
-
-### `ConcertId.java`
-Local id so the package imports nothing from `…eventsourced`.
-
-Source: [ConcertId.java](../src/main/java/dev/ted/jitterticket/orm/ConcertId.java)
-
-### `Concert.java` — mutable aggregate (the teaching subject)
-Note the two **back-door** members: the reconstitution constructor (state **in**) and `snapshot()` (state **out**), plus the nested `Snapshot` record. Everything else is ordinary domain behavior that mutates private fields directly — **no events**.
-
-Source: [Concert.java](../src/main/java/dev/ted/jitterticket/orm/Concert.java)
-
-### `ConcertDbo.java` — a dumb persistence row
-No behavior. The repository, not the DBO, owns the mapping. `id` is duplicated as the key column, exactly like a real JDBC row (a primary key + a serialized state blob) — keep it; it makes the DBO feel authentically persistence-y.
-
-Source: [ConcertDbo.java](../src/main/java/dev/ted/jitterticket/orm/ConcertDbo.java)
-
-### `ConcertRepository.java` + `InMemoryConcertRepository.java`
-The repository is where **both** back doors are called.
-
-Source: [ConcertRepository.java](../src/main/java/dev/ted/jitterticket/orm/ConcertRepository.java)
-
-Source: [InMemoryConcertRepository.java](../src/main/java/dev/ted/jitterticket/orm/InMemoryConcertRepository.java)
-
-### `ConcertRepositoryTest.java` (test source root) — proves it's a *working* before
-
-Source: [ConcertRepositoryTest.java](../src/test/java/dev/ted/jitterticket/orm/ConcertRepositoryTest.java)
+That sentence is the LO3 "back-door" clause stated precisely, and it replaces the map's current "zero public accessors" atom (see C).
 
 ---
 
-## What to deliberately OMIT (this is what "no after" means)
+# A. Code prep — the `orm` package (the "before")
 
-The `orm` package must contain **none** of the following (all present in the real `Concert`):
+### A1. Add `sellTicketsTo` to `orm.Concert` [BUILD]
+- `public void sellTicketsTo(CustomerId customerId, int quantity)` — mutates `availableTicketCount` directly; no event.
+- Rule: if `quantity > availableTicketCount`, reject (throw). One rule only — the per-customer limit belongs to Lab 2 and must not be pre-empted here.
+- Needs a local `CustomerId` record in `orm`, since the package imports nothing from `…eventsourced`.
+- The new state still round-trips through `Concert.Snapshot`, which already carries `availableTicketCount`. **That's the point of the beat:** the field is private, no query method exposes it, and the database gets it anyway.
 
-- **No `extends EventSourcedAggregate`**, and none of `enqueue / apply / applyAll / uncommittedEvents / clearUncommittedEvents`.
-- **No event types** (`ConcertScheduled / ConcertRescheduled / TicketsSold / TicketSalesStopped / ConcertEvent / Event`). Behavior mutates fields instead of enqueuing events.
-- **No `reconstitute(List<events>)`** — reconstruction is `new Concert(snapshot)` only.
-- **No `EventStore / CommandExecutorFactory / projectors / processors`** imports.
+### A2. Remove the `availableTicketCount()` query method from `orm.Concert` [BUILD]
+Right now it's public, which blunts A1. Once it's gone:
+- Nothing in the domain or a screen reads it.
+- `snapshot()` still hands it to the repository — the hole punch is visible with nothing else to blame it on.
+- `ConcertRepositoryTest` asserts on it today, so the assertion moves to observable behavior instead (sell 4 of 100, then a 97-ticket purchase is rejected while a 96-ticket one succeeds).
 
-The members that exist **only here** — `snapshot()`, `new Concert(Snapshot)`, the nested `Concert.Snapshot`, `ConcertDbo`, and the repository's mapping (both directions) — are exactly what the reveal deletes, replaced by events + `apply()` + the event store.
+Keep `artist()`, `showDateTime()`, `doorsTime()` and `ticketsOnSale()` — those are the legitimate query methods, and keeping them makes the distinction teachable rather than absolute.
 
----
+### A3. Give `orm.Concert.rescheduleTo` the same guard as the real aggregate [BUILD]
+The real `Concert.rescheduleTo` only reschedules when the new date is later **and** no tickets have been sold. `orm.Concert` has no guard. Side by side, that difference reads as if event sourcing caused it. Add the same guard so **the only differences between versions 1 and 2 are persistence**.
 
-## The round-trip (what the debrief strikes through)
-
-The two hole-punch calls live in the repository:
-
-```java
-// save(concert):
-Concert.Snapshot snapshot = concert.snapshot(); // <-- back door (out)
-store.put(concert.getId(), new ConcertDbo(concert.getId(), snapshot));
-
-// findById(id):
-return Optional.ofNullable(store.get(id))
-               .map(dbo -> new Concert(dbo.snapshot())); // <-- back door (in)
-```
-
-`snapshot()` and `new Concert(snapshot)` exist only because the store needs the aggregate's guts. Nothing else in `Concert` calls them.
+### A4. Sell-path test for `orm` [BUILD]
+Add to `ConcertRepositoryTest` (or a sibling test): sell tickets, save, reload, sell again, and show the availability carried across the round-trip. This is the "working before" evidence for the new behavior.
 
 ---
 
-## Recommended prop — the persistence tax made physical (the table & the migration)
+# B. Code prep — the pure-ES, non-aggregate version (Lab 2 lead-in)
 
-Two static SQL artifacts turn the abstract "traditional persistence has a tax" into something the room can see. They're **reading props**, not wired into the app — you don't need a live database.
+### B1. New isolated package [BUILD]
+Proposed name: **`dev.ted.jitterticket.decider`** — *confirm or rename before I build it.* Same isolation rule as `orm`: imports nothing from `…eventsourced`, nothing from `…orm`.
 
-Files: `docs/lab0/concert-schema.sql` and `docs/lab0/add-on-sale-schedule.migration.sql`.
+Contents:
+- **Local event types** — `ConcertEvent` (sealed), `ConcertScheduled`, `TicketsSold`. Minimal: no metadata/`null` second field, no `Id` plumbing. They are copies, deliberately, so the decider reads clean.
+- **`ConcertDecider`** — one static function, no fields, no instance:
+  ```java
+  static List<ConcertEvent> sellTickets(List<ConcertEvent> history, CustomerId customerId, int quantity)
+  ```
+  It folds `history` into **local variables** (capacity minus tickets sold), applies the one rule, and returns the resulting events (or an empty list / a rejection — decide in B2).
+- **A minimal event store** — append + query over a `Map<ConcertId, List<ConcertEvent>>`. Roughly 15 lines. This is where "append + query" is literally true, unlike the real `EventStore`.
+- **`ConcertDeciderTest`** — Given events → When command → Then events. This also demonstrates the LO4 testing pattern with nothing to mock and no object to construct.
 
-**Beat 2 — the table IS your internal representation.** Show `concert-schema.sql`: every column is one of `Concert`'s private fields. The database can see the whole aggregate; that's the coupling, made physical.
-
-```sql
-CREATE TABLE concert (
-    id                       UUID PRIMARY KEY,
-    artist                   VARCHAR(255) NOT NULL,
-    ticket_price             INTEGER NOT NULL,
-    show_date_time           TIMESTAMP NOT NULL,
-    doors_time               TIME NOT NULL,
-    capacity                 INTEGER NOT NULL,
-    available_ticket_count   INTEGER NOT NULL,
-    max_tickets_per_purchase INTEGER NOT NULL,
-    tickets_on_sale          BOOLEAN NOT NULL
-);
-```
-
-**Beat 3 — change costs a migration.** Show `add-on-sale-schedule.migration.sql`: adding a scheduled on-sale time means a new column, and every existing row must be dealt with.
-
-```sql
-ALTER TABLE concert ADD COLUMN on_sale_at TIMESTAMP;   -- + backfill the existing rows?
-```
-
-**Say the framing precisely.** Scheduled on-sale is a genuinely *new fact*, so ES is **not** "zero code" — it adds a `TicketSalesScheduled` event + one `apply()` case. The honest win is **"no migration, history untouched"** (old streams simply lack the event) — not "no code." For the *no-caveats* version, use a field **derivable from existing events** (e.g. tickets-sold-so-far from `TicketsSold`): there ES adds nothing to the write path while the table still needs a column + backfill. (This beat also foreshadows Lab 1B.)
+### B2. Decisions to lock before I write it
+1. **Rejection style:** throw, or return an empty list of events? (The map's LO4 atom says *"a rejected command may emit NO event — events are facts, not errors."* An empty list matches the atom; a throw matches the rest of this codebase.)
+2. **Does the decider take the whole history, or a folded decision model?** You chose the decider function, so: history in, events out, folding inline. Confirm you don't want the intermediate `record DecisionModel(...)` — that's the Lab 2 shape and might be better saved for Lab 2 itself.
+3. **Tags / query predicate:** leave them out entirely here (pure Lab 2 material), or gesture at them in a comment?
 
 ---
 
-## Verification checklist
+# C. Knowledge-map corrections (LO3 branch)
 
-- [ ] `orm` package compiles.
-- [ ] `ConcertRepositoryTest` is green (the round-trip actually persists state).
-- [ ] `ConcertDbo` is a `record` with **no** behavior; `Concert.Snapshot` is nested; the mapping lives in the repository (both directions).
-- [ ] A search of `orm/` shows **zero** imports from `dev.ted.jitterticket.eventsourced`.
-- [ ] The real `domain/concert/Concert.java` is unchanged (the untouched "after").
-- [ ] The two SQL props are on hand (`docs/lab0/`).
-- [ ] You can open `orm.Concert` and `eventsourced.domain.concert.Concert` side-by-side for the reveal.
+Three L00 atoms don't match reality. Edit both [knowledge-map.md](knowledge-map.md) and `knowledge-map.html` — the HTML is generated but hand-editable; each atom appears once as a literal string.
 
-## In the session
+| Current atom | Problem | Proposed replacement |
+|---|---|---|
+| `Delete ConcertDbo / asConcert(); append + query replace save + findById` | `asConcert()` never existed (the repository owns the mapping). The real `EventStore` **has** `save(aggregate)` and `findById(id)` — the repository shape survives event sourcing. | `Delete ConcertDbo + the snapshot mapping; save/findById survive — only the back doors go` |
+| `The aggregate can now expose ZERO public state accessors` | False for the real `Concert` (8 public query methods), and false in spirit: query methods for domain/UI are legitimate. | `Query methods for domain/UI are fine; state that only the DB demanded (availableTicketCount) stays private` |
+| `Adding a field folds from existing events — no persistence code changes` | True only for a **derivable** field. The current SQL prop uses scheduled-on-sale, a genuinely new fact that does cost an event + an `apply` case. | `A derivable field (tickets sold so far) folds from existing events — no migration, no persistence code` |
 
-Show `orm.Concert` (before) → run the strike-through: point at every member that exists only for the database, delete it, then reveal the SQL table + migration (the persistence tax), and finally `eventsourced.domain.concert.Concert` (after), where those members are gone and behavior emits events folded by `apply()`. Land: **the aggregate should never need a method whose only caller is the database.**
+**Also consider (your call):**
+- Retag `In DCB there is NO aggregate to load — you query and fold` as `[L00 · L2]`, since version 3 now introduces it.
+- The `[F]`-tagged atoms *"a repository hides a store behind a collection illusion"* and *"saving forces the aggregate to expose its whole internal state"* are marked Foundation, but Lab 0 is where they're actually demonstrated. Retag `[F · L00]`.
+- The LO3 note at the bottom of the map still says Lab 0 strikes out "the DBO/mapper"; update it for the three-version shape.
+
+---
+
+# D. Doc work
+
+### D1. Rewrite `lab-0-delete-the-snapshot.md` [BUILD — not started, on hold at your request]
+The review found the Java in it matches neither `orm.Concert` nor the real aggregate. It uses `ShowTime`, `onSale`, `startTicketSales()`, `TicketsOnSale`, `Concert.from(history)` and commands returning `List<ConcertEvent>` — several of which are things participants build in **Lab 1A**, so they don't exist yet at Lab 0 time. Planned fixes:
+- Replace the inline sketches with links to the real files (as this plan does), or rewrite them with the real names: `showDateTime`/`doorsTime`, `ticketsOnSale`, `stopTicketSales()`/`TicketSalesStopped`, `reconstitute(...)`, `void` commands calling `enqueue(...)`.
+- Fix `apply()`: it is `protected` (an override), not private. Debrief Q3's argument has to change accordingly.
+- Fix the "no repository to delete" claim and the `append`/`query` flow to match C's first atom.
+- Rewrite debrief Q2 around the accessors-vs-back-door distinction.
+- Rebuild the scoreboard around `sellTicketsTo` and `availableTicketCount`.
+- Number the beats consistently (the doc says "three beats" but only labels Beat 3).
+- Add the ES-snapshot caveat's local example: this codebase already uses "snapshot" for **projections** (`ProjectionCoordinator.loadSnapshot()`), which is exactly the opt-in checkpoint kind.
+
+### D2. New doc: `docs/lab-2-lead-in-decider.md` [BUILD]
+Short facilitator piece for version 3: the decider function, "there is no aggregate to load", append + query for real, and the Given/When/Then test with nothing to construct. Cross-link from the Lab 0 doc and from the Lab 2 material when it's written.
+
+### D3. `docs/README.md` [BUILD]
+Add the archive folder, the new lead-in doc, and the new package; refresh the Lab 0 line for the three-version shape.
+
+---
+
+# E. Verification checklist
+
+- [ ] `orm.Concert.sellTicketsTo` exists, enforces the availability rule, and has **no** `availableTicketCount()` query method.
+- [ ] `orm.Concert.rescheduleTo` guards exactly like the real aggregate.
+- [ ] `orm` tests green, including the sell-path round-trip.
+- [ ] The decider package exists, imports nothing from `…eventsourced` or `…orm`, and its Given/When/Then test is green.
+- [ ] The real `eventsourced` code is still untouched (`git diff` shows nothing under `src/main/java/dev/ted/jitterticket/eventsourced`).
+- [ ] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
+- [ ] `lab-0-delete-the-snapshot.md` names only members that exist **before** Lab 1A.
+- [ ] `docs/README.md` points at every current doc, and the archived plan is clearly marked as history.

@@ -15,7 +15,7 @@ Goal: get the repo to a **Lab 1 starting state** where the app compiles and runs
 
 ## A1. Baseline sanity [CONFIRM]
 - App boots; the **I/O-Free Tests** run config is green.
-- Lab 0's `dev.ted.jitterticket.lab0` package is present and its round-trip test passes (from the Lab 0 prep doc). It's isolated, so it won't interfere.
+- Lab 0's `dev.ted.jitterticket.orm` package is present and its round-trip test passes (from the Lab 0 prep doc). It's isolated, so it won't interfere.
 
 ## A2. Seed data [BUILD]
 - **Activate a populator.** `SmallSampleDataPopulator` is currently `//@Component` (inactive). Uncomment `@Component` on it (or `LargeSampleDataPopulator`) so screens have content. It `TRUNCATE`s `events, concert_sales, concert_sales_projection` on boot — fine for a workshop.

@@ -200,5 +200,4 @@ Same word, opposite relationship to encapsulation.
 - Keep both `Concert` files visible simultaneously; the contrast does the teaching.
 - Resist implementing anything — this is a *reading and deleting* exercise. Save the typing for Labs 1–3.
 - If the room is skeptical that "nobody writes the snapshot pattern," point out that this *is* the disciplined version (pure domain, no annotations). The naive JPA-entity version leaks even more.
-- If you want the live "`SELECT *` shows my private fields" moment for Beat 2, back the repo with embedded **H2** (no Docker, instant), kept isolated to `lab0`. Optional; the static SQL prop makes the point without it.
 - The single sentence to land: **the aggregate should never need a method whose only caller is the database.**

@@ -10,7 +10,7 @@ Planning and facilitation material for the JitterTicket event-sourcing workshop 
 ## Lab 0 — "Delete the Snapshot" (LO3 demonstrator)
 
 - **[lab-0-delete-the-snapshot.md](lab-0-delete-the-snapshot.md)** — Facilitator/teaching write-up: the before/after `Concert`, the guided strike-through, scoreboard, the persistence-tax beat (table + migration), debrief questions, and the ES-snapshot caveat. *Run this in the session.*
-- **[lab-0-prep-plan.md](lab-0-prep-plan.md)** — Build plan for the "before": the isolated, ES-free `lab0` package (full Java skeletons — nested `Concert.Snapshot`, dumb-bag `ConcertDbo` record, repo-owned mapping), what to omit, the round-trip demo, and a verification checklist. *Do this before the session.*
+- **[lab-0-prep-plan.md](lab-0-prep-plan.md)** — Build plan for the "before": the isolated, ES-free `orm` package (links to the Java sources — nested `Concert.Snapshot`, dumb-bag `ConcertDbo` record, repo-owned mapping), what to omit, the round-trip demo, and a verification checklist. *Do this before the session.*
 - **[lab0/concert-schema.sql](lab0/concert-schema.sql)** — Prop: "what the table looks like now" (columns == `Concert`'s private fields).
 - **[lab0/add-on-sale-schedule.migration.sql](lab0/add-on-sale-schedule.migration.sql)** — Prop: the migration traditional persistence forces on you, with the precise ES-vs-table framing. Foreshadows Lab 1B.
 

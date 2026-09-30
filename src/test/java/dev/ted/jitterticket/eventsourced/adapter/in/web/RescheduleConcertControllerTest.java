@@ -15,6 +15,7 @@ import dev.ted.jitterticket.eventsourced.domain.concert.ConcertFactory;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
@@ -77,7 +78,7 @@ class RescheduleConcertControllerTest {
 
         String redirect = rescheduleConcertController
                 .rescheduleConcert(concertIdString, rescheduleFormOf(
-                        "2026-03-14", "21:00", "20:00"));
+                        "2026-03-14", "21:00", "20:00"), new RedirectAttributesModelMap());
 
         assertThat(redirect)
                 .isEqualTo("redirect:/reschedule/" + concertIdString);

@@ -25,7 +25,7 @@ public class Commands {
                     LocalDateTime showDateTime = reschedule.showDateTime();
                     ensureNoConflictFor(showDateTime);
                     // call "internal" (aggregate) command method
-                    concert.rescheduleTo(
+                    return concert.rescheduleTo(
                             showDateTime,
                             reschedule.doorsTime());
                 });

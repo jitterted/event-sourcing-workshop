@@ -5,11 +5,14 @@ import dev.ted.jitterticket.eventsourced.application.ConcertQuery;
 import dev.ted.jitterticket.eventsourced.application.RescheduleParams;
 import dev.ted.jitterticket.eventsourced.domain.concert.Concert;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
+import dev.ted.jitterticket.support.Result;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -39,10 +42,16 @@ public class RescheduleConcertController {
 
     @PostMapping("/reschedule/{concertId}")
     public String rescheduleConcert(@PathVariable("concertId") String concertIdStr,
-                                    RescheduleForm rescheduleForm) {
+                                    RescheduleForm rescheduleForm,
+                                    RedirectAttributes redirectAttributes) {
 
-        rescheduleCommand.execute(ConcertId.from(concertIdStr),
-                                  rescheduleForm.asCommandParams());
+        Result<Void, ConcertRejection> result =
+                rescheduleCommand.execute(ConcertId.from(concertIdStr),
+                                          rescheduleForm.asCommandParams());
+
+        if (result instanceof Result.Failure<Void, ConcertRejection>(ConcertRejection rejection)) {
+            redirectAttributes.addFlashAttribute("rejectionMessage", rejection.message());
+        }
 
         return "redirect:/reschedule/" + concertIdStr;
     }

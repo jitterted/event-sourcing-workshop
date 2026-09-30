@@ -1,6 +1,9 @@
 package dev.ted.jitterticket.eventsourced.application;
 
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
+import dev.ted.jitterticket.support.Result;
+
 @FunctionalInterface
 public interface CommandWithParams<AGGREGATE, PARAMS> {
-    void execute(AGGREGATE aggregate, PARAMS params);
+    Result<Void, ConcertRejection> execute(AGGREGATE aggregate, PARAMS params);
 }

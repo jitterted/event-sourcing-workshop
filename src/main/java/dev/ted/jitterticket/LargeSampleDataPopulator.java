@@ -76,7 +76,7 @@ public class LargeSampleDataPopulator implements ApplicationRunner {
         for (Concert concert : concerts) {
             for (Customer customer : customers) {
                 int quantity = random.nextBoolean() ? 2 : 4;
-                concert.sellTicketsTo(customer.getId(), quantity);
+                concert.sellTicketsTo(customer.getId(), quantity).orElseThrow();
                 customer.purchaseTickets(concert, TicketOrderId.createRandom(), quantity);
             }
             concertStore.save(concert);

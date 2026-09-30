@@ -47,13 +47,17 @@ public class PurchaseTicketsUseCase {
         Customer customer = customerStore.findById(customerId)
                                          .orElseThrow(() -> new RuntimeException("Customer not found for ID: " + customerId));
         return concertStore.findById(concertId)
-                           .map(concert -> {
-                               concert.sellTicketsTo(customerId, quantity);
+                           .flatMap(concert -> {
+                               if (concert.sellTicketsTo(customerId, quantity).isRejected()) {
+                                   // TODO: return the ConcertRejection itself, so the caller can
+                                   //  tell "no such concert" apart from "not enough tickets"
+                                   return Optional.<TicketOrderId>empty();
+                               }
                                concertStore.save(concert);
                                TicketOrderId ticketOrderId = ticketOrderIdGenerator.nextTicketOrderId();
                                customer.purchaseTickets(concert, ticketOrderId, quantity);
                                customerStore.save(customer);
-                               return ticketOrderId;
+                               return Optional.of(ticketOrderId);
                            });
 
         // return ticketOrderId inside of a Result object (success/failure)

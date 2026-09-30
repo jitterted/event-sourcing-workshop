@@ -4,6 +4,8 @@ import dev.ted.jitterticket.eventsourced.application.port.EventStore;
 import dev.ted.jitterticket.eventsourced.domain.concert.Concert;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertEvent;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
+import dev.ted.jitterticket.support.Result;
 
 public class CommandExecutorFactory {
     private final EventStore<ConcertId, ConcertEvent, Concert> concertEventStore;
@@ -25,8 +27,12 @@ public class CommandExecutorFactory {
     public Command<ConcertId> wrap(Command<Concert> concertCommand) {
         return concertId -> {
             Concert concert = concertQuery.find(concertId);
-            concertCommand.execute(concert);
-            concertEventStore.save(concert);
+            Result<Void, ConcertRejection> result = concertCommand.execute(concert);
+            // a rejected command changed nothing, so there is nothing to save
+            if (result.isSuccess()) {
+                concertEventStore.save(concert);
+            }
+            return result;
         };
     }
 
@@ -34,8 +40,12 @@ public class CommandExecutorFactory {
             CommandWithParams<Concert, RescheduleParams> command) {
         return (concertId, reschedule) -> {
             Concert concert = concertQuery.find(concertId);
-            command.execute(concert, reschedule);
-            concertEventStore.save(concert);
+            Result<Void, ConcertRejection> result = command.execute(concert, reschedule);
+            // a rejected command changed nothing, so there is nothing to save
+            if (result.isSuccess()) {
+                concertEventStore.save(concert);
+            }
+            return result;
         };
     }
 

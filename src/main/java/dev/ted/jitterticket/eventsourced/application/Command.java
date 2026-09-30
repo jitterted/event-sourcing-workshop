@@ -1,6 +1,9 @@
 package dev.ted.jitterticket.eventsourced.application;
 
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
+import dev.ted.jitterticket.support.Result;
+
 @FunctionalInterface
 public interface Command<T> {
-    void execute(T t);
+    Result<Void, ConcertRejection> execute(T t);
 }

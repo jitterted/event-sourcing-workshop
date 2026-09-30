@@ -2,6 +2,7 @@ package dev.ted.jitterticket.eventsourced.domain.concert;
 
 import dev.ted.jitterticket.eventsourced.domain.EventSourcedAggregate;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerId;
+import dev.ted.jitterticket.support.Result;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -126,25 +127,35 @@ public class Concert extends EventSourcedAggregate<ConcertEvent, ConcertId> {
     // other potential validations for this decision:
     // * New date/time must be X amount of time in the future
     // * Must not conflict with existing Concert
-    public void rescheduleTo(LocalDateTime newShowDateTime, LocalTime newDoorsTime) {
-        if (newShowDateTime.isAfter(showDateTime) && capacity - availableTicketCount == 0) {
-            ConcertRescheduled concertRescheduled =
-                    new ConcertRescheduled(getId(), null, newShowDateTime, newDoorsTime);
-            enqueue(concertRescheduled);
+    public Result<Void, ConcertRejection> rescheduleTo(LocalDateTime newShowDateTime, LocalTime newDoorsTime) {
+        if (!newShowDateTime.isAfter(showDateTime)) {
+            return Result.rejected(ConcertRejection.NEW_SHOW_DATE_TIME_IS_NOT_LATER);
         }
+        if (capacity - availableTicketCount != 0) {
+            return Result.rejected(ConcertRejection.TICKETS_HAVE_ALREADY_BEEN_SOLD);
+        }
+        ConcertRescheduled concertRescheduled =
+                new ConcertRescheduled(getId(), null, newShowDateTime, newDoorsTime);
+        enqueue(concertRescheduled);
+        return Result.succeeded();
     }
 
-    public void sellTicketsTo(CustomerId customerId, int quantity) {
+    public Result<Void, ConcertRejection> sellTicketsTo(CustomerId customerId, int quantity) {
+        if (quantity > availableTicketCount) {
+            return Result.rejected(ConcertRejection.NOT_ENOUGH_TICKETS_AVAILABLE);
+        }
         TicketsSold ticketsSold = new TicketsSold(getId(),
                                                   null,
                                                   quantity,
                                                   quantity * ticketPrice);
         enqueue(ticketsSold);
-        // have we sold out? enqueue(TicketSalesStopped)
+        // TODO: have we sold out? enqueue(TicketSalesStopped)
+        return Result.succeeded();
     }
 
-    public void stopTicketSales() {
+    public Result<Void, ConcertRejection> stopTicketSales() {
         enqueue(new TicketSalesStopped(getId(), null));
+        return Result.succeeded();
     }
 
     //endregion Commands

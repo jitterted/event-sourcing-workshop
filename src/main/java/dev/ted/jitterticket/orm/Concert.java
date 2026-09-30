@@ -1,5 +1,7 @@
 package dev.ted.jitterticket.orm;
 
+import dev.ted.jitterticket.support.Result;
+
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -52,23 +54,48 @@ public class Concert {
     }
 
     // region: Commands (behavior): changes fields directly
-    public void rescheduleTo(LocalDateTime newShowDateTime, LocalTime newDoorsTime) {
+
+    public Result<Void, ConcertRejection> rescheduleTo(LocalDateTime newShowDateTime, LocalTime newDoorsTime) {
+        if (!newShowDateTime.isAfter(showDateTime)) {
+            return Result.rejected(ConcertRejection.NEW_SHOW_DATE_TIME_IS_NOT_LATER);
+        }
+        if (capacity - availableTicketCount != 0) {
+            return Result.rejected(ConcertRejection.TICKETS_HAVE_ALREADY_BEEN_SOLD);
+        }
         this.showDateTime = newShowDateTime;
         this.doorsTime = newDoorsTime;
+        return Result.succeeded();
     }
 
-    public void stopTicketSales() {
-        this.ticketsOnSale = false;
+    // availableTicketCount is private state that only this decision reads:
+    // event sourcing can keep it that way, ORM persistence can not
+    public Result<Void, ConcertRejection> sellTicketsTo(CustomerId customerId, int quantity) {
+        if (quantity > availableTicketCount) {
+            return Result.rejected(ConcertRejection.NOT_ENOUGH_TICKETS_AVAILABLE);
+        }
+        this.availableTicketCount -= quantity;
+        return Result.succeeded();
     }
+
+    public Result<Void, ConcertRejection> stopTicketSales() {
+        this.ticketsOnSale = false;
+        return Result.succeeded();
+    }
+
     // end region Commands
 
+
     // region: Queries: return field values
+
     public ConcertId getId() { return id; }
     public LocalDateTime showDateTime() { return showDateTime; }
     public LocalTime doorsTime() { return doorsTime; }
     public boolean ticketsOnSale() { return ticketsOnSale; }
     public String artist() { return artist; }
-    public int availableTicketCount() { return availableTicketCount; }
+    // Note that there's no `availableTicketCount()` query method
+    // nothing in the domain or the UI needs it, but snapshot() has to provide it to the database
+    // --> that's the back door/break in encapsulation required by ORMs
+
     // end region Queries
 
     // Concert's internal state representation

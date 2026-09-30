@@ -122,9 +122,14 @@ public class ConcertStartedProcessor implements EventStreamConsumer {
                                LocalDateTime showDateTime) {
         if (inTheFuture(showDateTime)) {
             ScheduledFuture<?> scheduledFuture = scheduledExecutorService
-                    .schedule(() -> commandExecutorFactory
-                                      .wrap(Concert::stopTicketSales)
-                                      .execute(concertId),
+                    .schedule(() -> {
+                                  // block lambda (a Runnable): stopTicketSales can not be
+                                  // rejected, and an expression lambda would bind to the
+                                  // Callable overload now that commands return a Result
+                                  commandExecutorFactory
+                                          .wrap(Concert::stopTicketSales)
+                                          .execute(concertId);
+                              },
                               delayFromNowInMinutes(showDateTime),
                               TimeUnit.MINUTES
                     );

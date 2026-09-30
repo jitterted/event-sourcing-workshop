@@ -166,16 +166,17 @@ public class SmallSampleDataPopulator implements ApplicationRunner {
                 100,
                 8);
 
+        // sample data must not be quietly wrong: fail the boot if a command is rejected
         sonicWavesConcert.rescheduleTo(
                 daysFromNowAt(33, 21, 0),
-                LocalTime.of(20, 0));
+                LocalTime.of(20, 0)).orElseThrow();
 
-        sonicWavesConcert.sellTicketsTo(firstCustomerId, 8);
-        sonicWavesConcert.sellTicketsTo(firstCustomerId, 4);
-        sonicWavesConcert.sellTicketsTo(firstCustomerId, 2);
-        sonicWavesConcert.sellTicketsTo(secondCustomerId, 1);
-        sonicWavesConcert.sellTicketsTo(secondCustomerId, 2);
-        sonicWavesConcert.sellTicketsTo(secondCustomerId, 3);
+        sonicWavesConcert.sellTicketsTo(firstCustomerId, 8).orElseThrow();
+        sonicWavesConcert.sellTicketsTo(firstCustomerId, 4).orElseThrow();
+        sonicWavesConcert.sellTicketsTo(firstCustomerId, 2).orElseThrow();
+        sonicWavesConcert.sellTicketsTo(secondCustomerId, 1).orElseThrow();
+        sonicWavesConcert.sellTicketsTo(secondCustomerId, 2).orElseThrow();
+        sonicWavesConcert.sellTicketsTo(secondCustomerId, 3).orElseThrow();
 
         concertStore.save(sonicWavesConcert);
     }

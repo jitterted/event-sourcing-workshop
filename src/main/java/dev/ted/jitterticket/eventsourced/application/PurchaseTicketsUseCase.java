@@ -49,9 +49,9 @@ public class PurchaseTicketsUseCase {
         return concertStore.findById(concertId)
                            .flatMap(concert -> {
                                if (concert.sellTicketsTo(customerId, quantity).isRejected()) {
-                                   // TODO: return the ConcertRejection itself, so the caller can
-                                   //  tell "no such concert" apart from "not enough tickets"
-                                   return Optional.<TicketOrderId>empty();
+                                   // TODO: return ConcertRejection so caller can differentiate between
+                                   //       "no such concert" and "not enough tickets"
+                                   return Optional.empty();
                                }
                                concertStore.save(concert);
                                TicketOrderId ticketOrderId = ticketOrderIdGenerator.nextTicketOrderId();
@@ -60,7 +60,7 @@ public class PurchaseTicketsUseCase {
                                return Optional.of(ticketOrderId);
                            });
 
-        // return ticketOrderId inside of a Result object (success/failure)
+        // return ticketOrderId inside a Result object (success/failure)
         // later: notify customer of ticket purchase with a PDF and a link
     }
 

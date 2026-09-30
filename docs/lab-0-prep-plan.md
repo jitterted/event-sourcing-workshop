@@ -14,9 +14,9 @@ Three versions of `Concert`, shown in two separate sittings:
 |---|---|---|---|
 | 1 | **ORM** — snapshot round-trip, back doors | `dev.ted.jitterticket.orm` | Lab 0 opener (15–20 min) |
 | 2 | **ES aggregate** — events + `apply()` fold | `eventsourced.domain.concert.Concert` (real code, untouched) | Lab 0 opener |
-| 3 | **Pure ES, non-aggregate** — a `decide` function, no object holding state | new isolated package (see B1) | Lead-in to **Lab 2**, not the opener |
+| 3 | **Pure ES, non-aggregate** — a `decide` function, no object holding state | new isolated package (see B1) | Lead-in to **Lab 2**, not the opener — **DEFERRED to the Lab 2 prep round** |
 
-Splitting 3 off keeps the opener tight and gives Lab 2's DCB material a running start.
+Splitting 3 off keeps the opener tight and gives Lab 2's DCB material a running start. **Version 3 (B1, B2, D2) is deferred until we prepare Lab 2; Lab 0 prep ships with two versions.** Lab 0 docs must not reference the decider or link to `lab-2-lead-in-decider.md`.
 
 **The behavior all three implement: `sellTicketsTo(customerId, quantity)`,** with one rule — *quantity must not exceed the tickets available*. It's the cleanest illustration of the distinction that drives this round:
 
@@ -95,7 +95,7 @@ Add to `ConcertRepositoryTest` (or a sibling test): sell tickets, save, reload, 
 
 ---
 
-# B. Code prep — the pure-ES, non-aggregate version (Lab 2 lead-in)
+# B. Code prep — the pure-ES, non-aggregate version (Lab 2 lead-in) [DEFERRED to Lab 2 prep]
 
 ### B1. New isolated package [BUILD]
 Proposed name: **`dev.ted.jitterticket.decider`** — *confirm or rename before I build it.* Same isolation rule as `orm`: imports nothing from `…eventsourced`, nothing from `…orm`.
@@ -137,6 +137,7 @@ Three L00 atoms don't match reality. Edit both [knowledge-map.md](knowledge-map.
 # D. Doc work
 
 ### D1. Rewrite `lab-0-delete-the-snapshot.md` [BUILD — not started, on hold at your request]
+**Scope: two versions only (ORM vs. real ES aggregate); no decider, no link to the Lab 2 lead-in.**
 The review found the Java in it matches neither `orm.Concert` nor the real aggregate. It uses `ShowTime`, `onSale`, `startTicketSales()`, `TicketsOnSale`, `Concert.from(history)` and commands returning `List<ConcertEvent>` — several of which are things participants build in **Lab 1A**, so they don't exist yet at Lab 0 time. Planned fixes:
 - Replace the inline sketches with links to the real files (as this plan does), or rewrite them with the real names: `showDateTime`/`doorsTime`, `ticketsOnSale`, `stopTicketSales()`/`TicketSalesStopped`, `reconstitute(...)`, `void` commands calling `enqueue(...)`.
 - Fix `apply()`: it is `protected` (an override), not private. Debrief Q3's argument has to change accordingly.
@@ -146,13 +147,13 @@ The review found the Java in it matches neither `orm.Concert` nor the real aggre
 - Number the beats consistently (the doc says "three beats" but only labels Beat 3).
 - Add the ES-snapshot caveat's local example: this codebase already uses "snapshot" for **projections** (`ProjectionCoordinator.loadSnapshot()`), which is exactly the opt-in checkpoint kind.
 
-### D2. New doc: `docs/lab-2-lead-in-decider.md` [BUILD]
-Short facilitator piece for version 3: the decider function, "there is no aggregate to load", append + query for real, and the Given/When/Then test with nothing to construct. Cross-link from the Lab 0 doc and from the Lab 2 material when it's written.
+### D2. New doc: `docs/lab-2-lead-in-decider.md` [DEFERRED to Lab 2 prep, with B1]
+Short facilitator piece for version 3: the decider function, "there is no aggregate to load", append + query for real, and the Given/When/Then test with nothing to construct. Cross-link from the Lab 2 material when it's written (not from the Lab 0 doc).
 
 ### D3. `docs/README.md` [BUILD]
-Add the archive folder, the new lead-in doc, and the new package; refresh the Lab 0 line for the three-version shape.
+Add the archive folder; refresh the Lab 0 line for the two-version shape. List only docs that exist (decider doc and package come with Lab 2 prep).
 
-### D4. `PurchaseTicketsUseCase` → `Result` [BUILD]
+### D4. `PurchaseTicketsUseCase` → `Result` [IN PROGRESS — user implementing, tests first]
 Follow-up from A0, item 3. It needs a failure type that covers both "no such concert" and a `ConcertRejection`, and `PurchaseTicketsController` then shows the reason instead of throwing. Decide whether this is prep work or Lab 2 material.
 
 ---
@@ -165,7 +166,7 @@ Follow-up from A0, item 3. It needs a failure type that covers both "no such con
 - [x] `orm.Concert.sellTicketsTo` exists, enforces the availability rule, and has **no** `availableTicketCount()` query method.
 - [x] `orm.Concert.rescheduleTo` guards exactly like the real aggregate.
 - [x] `orm` tests green, including the sell-path round-trip (5 tests).
-- [ ] The decider package exists, imports nothing from `…eventsourced` or `…orm`, and its Given/When/Then test is green.
+- [ ] ~~The decider package exists…~~ **Deferred to Lab 2 prep** (B1).
 - [ ] ~~The real `eventsourced` code is still untouched~~ — no longer true, and deliberately so: A0 changed the aggregate, the command plumbing, the reschedule controller and the populators. The *shape* of the ES `Concert` (events + `apply`) is unchanged, which is what the reveal depends on.
 - [ ] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
 - [ ] `lab-0-delete-the-snapshot.md` names only members that exist **before** Lab 1A.

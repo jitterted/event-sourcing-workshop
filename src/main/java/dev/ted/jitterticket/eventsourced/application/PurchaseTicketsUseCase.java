@@ -5,9 +5,11 @@ import dev.ted.jitterticket.eventsourced.domain.TicketOrderId;
 import dev.ted.jitterticket.eventsourced.domain.concert.Concert;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertEvent;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
 import dev.ted.jitterticket.eventsourced.domain.customer.Customer;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerEvent;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerId;
+import dev.ted.jitterticket.support.Result;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -40,28 +42,33 @@ public class PurchaseTicketsUseCase {
         return new PurchaseTicketsUseCase(concertStore, customerStore, expectedTicketOrderUuid);
     }
 
-    public Optional<TicketOrderId> purchaseTickets(ConcertId concertId, CustomerId customerId, int quantity) {
+    public Result<TicketOrderId, ConcertRejection> purchaseTickets(ConcertId concertId, CustomerId customerId, int quantity) {
         // check if customer already has the max number of tickets for this concert
         // customer.canPurchaseTicketsFor(concertId, quantity)
         // ?? are use cases allowed to make decisions?
         Customer customer = customerStore.findById(customerId)
-                                         .orElseThrow(() -> new RuntimeException("Customer not found for ID: " + customerId));
-        return concertStore.findById(concertId)
-                           .flatMap(concert -> {
-                               if (concert.sellTicketsTo(customerId, quantity).isRejected()) {
-                                   // TODO: return ConcertRejection so caller can differentiate between
-                                   //       "no such concert" and "not enough tickets"
-                                   return Optional.empty();
-                               }
-                               concertStore.save(concert);
-                               TicketOrderId ticketOrderId = ticketOrderIdGenerator.nextTicketOrderId();
-                               customer.purchaseTickets(concert, ticketOrderId, quantity);
-                               customerStore.save(customer);
-                               return Optional.of(ticketOrderId);
-                           });
+                .orElseThrow(() -> new RuntimeException("Customer not found for ID: " + customerId));
 
-        // return ticketOrderId inside a Result object (success/failure)
+        Optional<Concert> concertOpt = concertStore.findById(concertId);
+        if (concertOpt.isEmpty()) {
+            return Result.rejected(ConcertRejection.CONCERT_NOT_FOUND);
+        }
+
+        return sellTickets(concertOpt.get(), customer, quantity);
+
         // later: notify customer of ticket purchase with a PDF and a link
+    }
+
+    private Result<TicketOrderId, ConcertRejection> sellTickets(Concert concert, Customer customer, int quantity) {
+        if (concert.sellTicketsTo(customer.getId(), quantity)
+                instanceof Result.Failure<Void, ConcertRejection>(var rejection)) {
+            return Result.rejected(rejection);
+        }
+        concertStore.save(concert);
+        TicketOrderId ticketOrderId = ticketOrderIdGenerator.nextTicketOrderId();
+        customer.purchaseTickets(concert, ticketOrderId, quantity);
+        customerStore.save(customer);
+        return Result.success(ticketOrderId);
     }
 
     @FunctionalInterface

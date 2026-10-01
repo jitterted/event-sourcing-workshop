@@ -7,10 +7,12 @@ import dev.ted.jitterticket.eventsourced.domain.TicketOrderId;
 import dev.ted.jitterticket.eventsourced.domain.concert.Concert;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertEvent;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
+import dev.ted.jitterticket.eventsourced.domain.concert.ConcertRejection;
 import dev.ted.jitterticket.eventsourced.domain.customer.Customer;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerEvent;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerId;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerRegistered;
+import dev.ted.jitterticket.support.Result;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -18,7 +20,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -54,19 +55,21 @@ public class PurchaseTicketsController {
     @PostMapping("/concerts/{concertId}")
     public String purchaseTickets(@PathVariable("concertId") String concertId,
                                   TicketOrderForm ticketOrderForm) {
-        Optional<TicketOrderId> ticketOrderId = purchaseTicketsUseCase
+        Result<TicketOrderId, ConcertRejection> result = purchaseTicketsUseCase
                 .purchaseTickets(
                         new ConcertId(UUID.fromString(concertId)),
                         new CustomerId(UUID.fromString(ticketOrderForm.customerId())),
                         ticketOrderForm.quantity());
-        String ticketOrderUuid = ticketOrderId.map(TicketOrderId::id)
-                                              .map(UUID::toString)
-                                              .orElseThrow();
-        return "redirect:/customers/" + ticketOrderForm.customerId() +
-               "/confirmations/" + ticketOrderUuid;
-    }
+        return switch (result) {
+            case Result.Success<TicketOrderId, ConcertRejection>(TicketOrderId id) ->
+                    "redirect:/customers/" + ticketOrderForm.customerId() + "/confirmations/" + id.id().toString();
+            case Result.Failure<TicketOrderId, ConcertRejection>(ConcertRejection rejection) -> {
+//                redirectAttributes.addFlashAttribute("rejectionMessage", rejection.message());
+                yield "redirect:/concerts/" + concertId;
+            }
+        };
 
-    // @GetMapping("/confirmations/{ticketOrderId}?customerId={customerId}
+    }
 
 }
 

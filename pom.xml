@@ -12,7 +12,7 @@
 	<artifactId>event-sourced</artifactId>
 	<version>1.0.0</version>
 	<name>JitterTicket Event-sourced Concert Ticketing</name>
-	<description>Minimal (as possible) example of an event-sourced concert event ticketing application.</description>
+	<description>Minimal example of an event-sourced concert event ticketing application.</description>
 	<url/>
 	<licenses>
 		<license/>

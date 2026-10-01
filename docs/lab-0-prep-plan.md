@@ -59,7 +59,7 @@ Today the codebase has three different answers, which is one too many for a side
 
 1. **`stopTicketSales` returns `Result` too**, against this section's original plan. `ConcertStartedProcessor` passes `Concert::stopTicketSales` as a `Command<Concert>`, and a `void` method no longer fits that interface. Every aggregate command now has one shape; the ones that can't reject always return success.
 2. **The `Runnable` / `Callable` overload trap.** In `ConcertStartedProcessor`, `schedule(() -> ...execute(concertId), delay, unit)` was a `Runnable`. Once `execute` returned a value, the expression lambda silently bound to the **`Callable`** overload, so no alarms were scheduled and 5 processor tests failed. Fixed with a block lambda + comment. **Lab 1B has participants write actuator code exactly like this** — worth calling out in the lab, or leaving as a deliberate trap to debrief.
-3. **`PurchaseTicketsUseCase` still returns `Optional<TicketOrderId>`.** A rejected sale is now indistinguishable from "concert not found", and an oversell surfaces as `orElseThrow()` in `PurchaseTicketsController` → a 500 error, not a message. A TODO marks it. **Open item: change it to `Result<TicketOrderId, …>` (see D4).**
+3. **`PurchaseTicketsUseCase` still returns `Optional<TicketOrderId>`.** A rejected sale is now indistinguishable from "concert not found", and an oversell surfaces as `orElseThrow()` in `PurchaseTicketsController` → a 500 error, not a message. A TODO marks it. **Resolved by D4.**
 4. **The real `sellTicketsTo` now enforces availability**, which overlaps Lab 1D's sold-out work. The sold-out *event* (`TicketSalesStopped` at zero available) is still unwritten, so 1D still has content — but **re-scope 1D in the Lab 1 doc** so it doesn't ask participants to add a rule that now exists.
 
 **Blast radius (what was actually touched)** (recommended — mixed styles across the reveal is exactly the noise that derails a room):
@@ -153,21 +153,22 @@ Short facilitator piece for version 3: the decider function, "there is no aggreg
 ### D3. `docs/README.md` [BUILD]
 Add the archive folder; refresh the Lab 0 line for the two-version shape. List only docs that exist (decider doc and package come with Lab 2 prep).
 
-### D4. `PurchaseTicketsUseCase` → `Result` [IN PROGRESS — user implementing, tests first]
-Follow-up from A0, item 3. It needs a failure type that covers both "no such concert" and a `ConcertRejection`, and `PurchaseTicketsController` then shows the reason instead of throwing. Decide whether this is prep work or Lab 2 material.
+### D4. `PurchaseTicketsUseCase` → `Result` [DONE]
+Follow-up from A0, item 3. **Shipped:** `purchaseTickets` returns `Result<TicketOrderId, ConcertRejection>`, with a new `CONCERT_NOT_FOUND` value on the domain `ConcertRejection` (not the `orm` copy). `PurchaseTicketsController` flashes `rejectionMessage` and redirects back for rule rejections, and throws `ResponseStatusException(NOT_FOUND)` for `CONCERT_NOT_FOUND`; `purchase-tickets.html` renders the message. Unit, use-case and MVC tests added (render test mutation-checked).
+
+**Deliberate shortcut, revisit in Lab 2 prep:** the controller special-cases `CONCERT_NOT_FOUND` with an `if` inside the `switch`, because "not found" is a use-case failure, not an aggregate rejection. When Lab 2's per-customer purchase limit adds a second use-case-level failure, promote the failure type to a sealed interface (`ConcertNotFound` / `Rejected(ConcertRejection)`) so the `switch` is exhaustive. An unknown *customer* still throws `RuntimeException` (caller bug, not a rejection).
 
 ---
 
 # E. Verification checklist
 
 - [x] **A0 applied** to `orm` and the real aggregate — no silent no-ops left; the decider follows when built.
-- [ ] `PurchaseTicketsUseCase` returns a `Result` instead of a bare `Optional` (D4).
+- [x] `PurchaseTicketsUseCase` returns a `Result` instead of a bare `Optional` (D4).
 - [ ] Lab 1D re-scoped for the availability rule that now lives in the real aggregate (A0, item 4).
 - [x] `orm.Concert.sellTicketsTo` exists, enforces the availability rule, and has **no** `availableTicketCount()` query method.
 - [x] `orm.Concert.rescheduleTo` guards exactly like the real aggregate.
 - [x] `orm` tests green, including the sell-path round-trip (5 tests).
 - [ ] ~~The decider package exists…~~ **Deferred to Lab 2 prep** (B1).
-- [ ] ~~The real `eventsourced` code is still untouched~~ — no longer true, and deliberately so: A0 changed the aggregate, the command plumbing, the reschedule controller and the populators. The *shape* of the ES `Concert` (events + `apply`) is unchanged, which is what the reveal depends on.
 - [ ] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
 - [ ] `lab-0-delete-the-snapshot.md` names only members that exist **before** Lab 1A.
 - [ ] `docs/README.md` points at every current doc, and the archived plan is clearly marked as history.

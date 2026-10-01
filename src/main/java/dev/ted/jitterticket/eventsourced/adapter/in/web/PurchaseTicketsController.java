@@ -14,11 +14,14 @@ import dev.ted.jitterticket.eventsourced.domain.customer.CustomerId;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerRegistered;
 import dev.ted.jitterticket.support.Result;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.Set;
 import java.util.UUID;
@@ -54,7 +57,7 @@ public class PurchaseTicketsController {
 
     @PostMapping("/concerts/{concertId}")
     public String purchaseTickets(@PathVariable("concertId") String concertId,
-                                  TicketOrderForm ticketOrderForm) {
+                                  TicketOrderForm ticketOrderForm, RedirectAttributes redirectAttributes) {
         Result<TicketOrderId, ConcertRejection> result = purchaseTicketsUseCase
                 .purchaseTickets(
                         new ConcertId(UUID.fromString(concertId)),
@@ -64,7 +67,11 @@ public class PurchaseTicketsController {
             case Result.Success<TicketOrderId, ConcertRejection>(TicketOrderId id) ->
                     "redirect:/customers/" + ticketOrderForm.customerId() + "/confirmations/" + id.id().toString();
             case Result.Failure<TicketOrderId, ConcertRejection>(ConcertRejection rejection) -> {
-//                redirectAttributes.addFlashAttribute("rejectionMessage", rejection.message());
+                if (rejection == ConcertRejection.CONCERT_NOT_FOUND) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, rejection.message());
+                }
+                // otherwise, something went wrong with the purchase attempt itself, such as not enough tickets
+                redirectAttributes.addFlashAttribute("rejectionMessage", rejection.message());
                 yield "redirect:/concerts/" + concertId;
             }
         };

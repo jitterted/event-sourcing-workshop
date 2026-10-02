@@ -92,10 +92,10 @@ The objectives lean on a common set of foundations and on one central idea, the 
 - **Enabling: Persistence no longer punches an encapsulation hole  —  Lab 0**
   - snapshot() out + new Concert(snapshot) in exist ONLY for the database `[L00]`
   - ES persists domain facts (events), not a full state dump `[L00]`
-  - Delete ConcertDbo / asConcert(); append + query replace save + findById `[L00]`
-  - The aggregate can now expose ZERO public state accessors `[L00]`
+  - Delete ConcertDbo + the snapshot mapping; save/findById survive — only the back doors go `[L00]`
+  - Query methods for domain/UI are fine; state that only the DB demanded (availableTicketCount) stays private `[L00]`
   - Persisted shape = facts, decoupled from internal representation `[L00]`
-  - Adding a field folds from existing events — no persistence code changes `[L00]`
+  - A derivable field (tickets sold so far) folds from existing events — no migration, no persistence code `[L00]`
 - **Enabling: ES replaces load-state with query-and-fold**
   - In DCB there is NO aggregate to load — you query and fold `[L2]`
   - Event log’s cheap filter dimensions: aggregate-id, event type, sequence `[F]`

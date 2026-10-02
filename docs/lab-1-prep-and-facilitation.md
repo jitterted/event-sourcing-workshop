@@ -22,7 +22,7 @@ Goal: get the repo to a **Lab 1 starting state** where the app compiles and runs
 - **Tune the spread** for the demos:
   - Keep several future concerts (already present: Blue Note Quartet, Stella Nova, etc.).
   - The **"Midnight Rebels"** concert is scheduled `now()+10s` and auto-stops via `ConcertStartedProcessor` — good for showing `TicketSalesStopped` live, but remove it if the flicker is distracting.
-  - Add **one near-capacity concert** (schedule with a small `capacity`, then several `sellTicketsTo(...)` calls summing near capacity) so **1D's sold-out** state is visible on day one.
+  - ✅ **Done:** `SmallSampleDataPopulator.addSoldOutConcertToStore()` seeds "Last Call Trio" (capacity 10, all 10 sold via `sellTicketsTo(...).orElseThrow()`), so **1D's sold-out** state is visible on day one. Needs the populator's `@Component` uncommented (above).
 - Note: pre-Lab-1, every `Concert.schedule(...)` is **on sale by default** (`ticketsOnSale = true`). The *variety* of on-sale vs not-on-sale states only appears once participants add start/stop in 1A/1C — so don't over-engineer seed states now.
 
 ## A3. Scaffold the management UI [BUILD] + [STUB]

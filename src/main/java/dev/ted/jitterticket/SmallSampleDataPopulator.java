@@ -63,6 +63,7 @@ public class SmallSampleDataPopulator implements ApplicationRunner {
 
     void populateConcertSampleData() {
         addSonicWavesConcertToStore();
+        addSoldOutConcertToStore();
 
         // this concert will quickly be made unavailable as it's scheduled
         // for 10 seconds in the future
@@ -179,6 +180,24 @@ public class SmallSampleDataPopulator implements ApplicationRunner {
         sonicWavesConcert.sellTicketsTo(secondCustomerId, 3).orElseThrow();
 
         concertStore.save(sonicWavesConcert);
+    }
+
+    // every ticket sold, so Lab 1D's sold-out state is visible from the first boot
+    private void addSoldOutConcertToStore() {
+        Concert soldOutConcert = Concert.schedule(
+                ConcertId.createRandom(),
+                "Last Call Trio",
+                60,
+                daysFromNowAt(21, 20, 0),
+                LocalTime.of(19, 0),
+                10,
+                4);
+
+        soldOutConcert.sellTicketsTo(firstCustomerId, 4).orElseThrow();
+        soldOutConcert.sellTicketsTo(secondCustomerId, 4).orElseThrow();
+        soldOutConcert.sellTicketsTo(firstCustomerId, 2).orElseThrow();
+
+        concertStore.save(soldOutConcert);
     }
 
     private void populateCustomerSampleData() {

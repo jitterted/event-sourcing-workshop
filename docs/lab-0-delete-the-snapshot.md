@@ -6,7 +6,7 @@
 
 ## Why this exercise exists
 
-LO3 is the objective that's normally *felt* rather than drilled — and in an already-event-sourced codebase the saving is invisible, because there's no repository to delete and no mapper to skip. You can't feel an absence.
+LO3 is the objective that's normally *felt* rather than drilled — and in an already-event-sourced codebase the saving is invisible, because there's no snapshot mapping to delete and no back door to skip. You can't feel an absence.
 
 This exercise manufactures the contrast. We start from the persistence style many teams actually use — a **pure domain model** (no ORM annotations) round-tripped through a **snapshot** — and delete the parts of it that exist *only* so the database can see inside the aggregate. The payload is visible: participants watch real members get struck through, and watch the aggregate's encapsulation improve at the same time.
 
@@ -26,28 +26,29 @@ Deliberately the *sophisticated* version: the domain model is clean Java with no
 ```java
 // Pure domain — but the DB still has to get its state in and out.
 public class Concert {
-    private ConcertId id;
-    private ShowTime  showTime;
-    private boolean   onSale;
-    // ... more private state ...
+    private ConcertId     id;
+    private LocalDateTime showDateTime;
+    private boolean       ticketsOnSale = true;
+    // ... more private state (capacity, availableTicketCount, ...) ...
 
     // BACK DOOR (in): the whole internal state, injected from outside.
     Concert(Snapshot s) {
-        this.id = s.id(); this.showTime = s.showTime(); this.onSale = s.onSale();
+        this.id = s.id(); this.showDateTime = s.showDateTime(); this.ticketsOnSale = s.ticketsOnSale();
+        // ... every other field ...
     }
 
-    public void startTicketSales() {
-        if (onSale) throw new IllegalStateException("already on sale");
-        this.onSale = true;
+    public Result<Void, ConcertRejection> stopTicketSales() {
+        this.ticketsOnSale = false;
+        return Result.succeeded();
     }
 
     // BACK DOOR (out): the whole internal state, handed to the repository.
     public Snapshot snapshot() {
-        return new Snapshot(id, showTime, onSale);
+        return new Snapshot(id, showDateTime, ticketsOnSale /* , ...every other field */);
     }
 
     // Concert's own state shape — exists ONLY so the DB can round-trip it.
-    public record Snapshot(ConcertId id, ShowTime showTime, boolean onSale) { }
+    public record Snapshot(ConcertId id, LocalDateTime showDateTime, boolean ticketsOnSale /* , ... */) { }
 }
 
 // A dumb persistence row. The repository — not the DBO — owns the mapping.
@@ -72,7 +73,7 @@ Optional<Concert> findById(ConcertId id) {
 
 ```java
 Concert concert = repository.findById(id).orElseThrow();  // load row -> rebuild
-concert.startTicketSales();                               // behavior mutates state
+concert.stopTicketSales();                                // behavior mutates state
 repository.save(concert);                                 // extract -> store
 ```
 
@@ -83,41 +84,40 @@ repository.save(concert);                                 // extract -> store
 ## The "after" — event-sourced, state never leaves the aggregate
 
 ```java
-public class Concert {
-    private ConcertId id;
-    private ShowTime  showTime;
-    private boolean   onSale;          // still fully private — nothing extracts it
+public class Concert extends EventSourcedAggregate<ConcertEvent, ConcertId> {
+    private LocalDateTime showDateTime;
+    private boolean       ticketsOnSale = true;   // still fully private — nothing extracts it
+    // ... more private state ...
 
     // Reconstitution: fold domain facts, not inject a state dump.
-    static Concert from(List<ConcertEvent> history) {
-        Concert c = new Concert();
-        history.forEach(c::apply);
-        return c;
+    public static Concert reconstitute(List<ConcertEvent> history) {
+        return new Concert(history);               // constructor just applyAll(history)
     }
 
-    public List<ConcertEvent> startTicketSales() {
-        if (onSale) throw new IllegalStateException("already on sale");
-        return List.of(new TicketsOnSale(id));       // behavior EMITS a fact
+    public Result<Void, ConcertRejection> stopTicketSales() {
+        enqueue(new TicketSalesStopped(getId(), null));   // behavior EMITS a fact
+        return Result.succeeded();
     }
 
-    private void apply(ConcertEvent event) {          // private fold
+    @Override
+    protected void apply(ConcertEvent event) {     // the fold, not public API
         switch (event) {
-            case ConcertScheduled e -> { this.id = e.id(); this.showTime = e.showTime(); }
-            case TicketsOnSale     e -> this.onSale = true;
-            default -> { }
+            case ConcertScheduled scheduled -> { this.setId(scheduled.concertId());
+                                                 this.showDateTime = scheduled.showDateTime(); /* ... */ }
+            case TicketSalesStopped _       -> ticketsOnSale = false;
+            // ... one case per event ...
         }
     }
     // no snapshot(), no Snapshot, no ConcertDbo, no mapper
 }
 ```
 
-The application flow shrinks to three steps, and none of them reads state out of the aggregate:
+The application flow *looks the same* — `save` and `findById` survive. What changed is what's behind them, and that nothing reads state out of the aggregate:
 
 ```java
-List<ConcertEvent> history = eventStore.query(id);   // load facts
-Concert concert            = Concert.from(history);  // fold
-List<ConcertEvent> events  = concert.startTicketSales(); // behavior emits facts
-eventStore.append(id, events);                       // store the facts
+Concert concert = concertStore.findById(id).orElseThrow();  // query the facts + fold
+concert.stopTicketSales();                                  // behavior enqueues a fact
+concertStore.save(concert);                                 // append the enqueued events
 ```
 
 ---
@@ -126,10 +126,10 @@ eventStore.append(id, events);                       // store the facts
 
 Do this live on the "before" files so deletion is visceral — actually comment out or delete each line as the room calls it, and keep a running tally.
 
-1. **"Point to every member that exists only so the database can save or load this aggregate."** The room should land on: the nested `Concert.Snapshot`, `snapshot()`, `Concert(Snapshot)`, `ConcertDbo`, and the repository's `snapshot()`/`new Concert(...)` mapping. Strike each one.
+1. **"Point to every member that exists only so the database can save or load this aggregate."** The room should land on: the nested `Concert.Snapshot`, `snapshot()`, `Concert(Snapshot)`, `ConcertDbo`, and the repository's `snapshot()`/`new Concert(...)` mapping. (Not `save`/`findById` — those stay; only the mapping behind them goes.) Strike each one.
 2. **"Which of those does the *domain* need?"** None. They are all persistence plumbing. Leave them struck through.
-3. **"What did the behavior produce in the ES version that we can persist instead?"** An event — `TicketsOnSale` — a fact the behavior was already emitting for domain reasons. Add it to the "kept" column.
-4. **"What replaced the two back doors?"** One private `apply()` fold. Add it — and note it's *smaller* than the members it replaced, and it's private.
+3. **"What did the behavior produce in the ES version that we can persist instead?"** An event — `TicketSalesStopped` — a fact the behavior was already emitting for domain reasons. Add it to the "kept" column.
+4. **"What replaced the two back doors?"** One `apply()` fold (`protected`, never called from outside). Add it — and note it's *smaller* than the members it replaced, and nothing outside can read state back through it.
 5. **Read the scoreboard back.** Count deletions vs. additions out loud.
 
 ---
@@ -140,11 +140,11 @@ Do this live on the "before" files so deletion is visceral — actually comment 
 |---|---|---|
 | `Concert.Snapshot` (nested record) | carries the whole internal state for the DB | ❌ deleted |
 | `snapshot()` — state **out** | hands full internal state to the repository | ❌ deleted — *the hole punch* |
-| `new Concert(Snapshot)` — state **in** | rebuilds state from the dump | ❌ replaced by `from(history)` fold |
+| `new Concert(Snapshot)` — state **in** | rebuilds state from the dump | ❌ replaced by `reconstitute(history)` fold |
 | `ConcertDbo` (dumb row) | the persistence shape of the aggregate | ❌ deleted |
-| repository's snapshot mapping (both ways) | persist / rehydrate raw state | ❌ replaced by `append` / `query` |
-| events (`TicketsOnSale`, …) | **domain facts** | ✅ kept — they were the point |
-| `apply()` / fold | rebuild state from facts (private) | ✅ added — smaller than the back doors it replaces |
+| repository's snapshot mapping (both ways) | persist / rehydrate raw state | ❌ replaced by the event store's append / fold — `save`/`findById` themselves stay |
+| events (`TicketSalesStopped`, …) | **domain facts** | ✅ kept — they were the point |
+| `apply()` / fold | rebuild state from facts (never public API) | ✅ added — smaller than the back doors it replaces |
 
 The shape of the win: **the members that disappear are exactly the ones with no domain meaning.** What remains is behavior and facts.
 
@@ -178,8 +178,8 @@ ALTER TABLE concert ADD COLUMN on_sale_at TIMESTAMP;   -- + backfill the existin
 ## Debrief questions
 
 1. **Which deleted members served the domain, and which served only the database?** (All of the deleted ones served only the database.)
-2. **Can `Concert` now expose zero public state accessors? Try to name one the domain still genuinely needs** — as opposed to one persistence used to demand.
-3. **We deleted `snapshot()` but added `apply()`. Why isn't `apply()` just another back door?** (It *consumes* facts the aggregate itself emitted, and it's private — nothing outside ever reads state back out. State goes in as domain events, never comes out as a dump.)
+2. **Which state does the aggregate *still* expose, and which did only the database force it to expose?** (Queries the domain/UI use — `showDateTime()`, `artist()`, `ticketsOnSale()` — are fine. `availableTicketCount` is the tell: only `sellTicketsTo` reads it, so the ES `Concert` can keep it private, but the ORM `Concert` must hand it to `snapshot()`.)
+3. **We deleted `snapshot()` but added `apply()`. Why isn't `apply()` just another back door?** (It *consumes* facts the aggregate itself emitted, and nothing outside ever calls it to read state back out. State goes in as domain events, never comes out as a dump.)
 4. **When you refactor `Concert`'s internal fields tomorrow, what persisted artifact must change?** (Before: the `concert` table's shape — an `ALTER TABLE` migration plus every existing row. After: nothing — the events are unchanged. The persisted shape is *facts*, decoupled from the internal representation.)
 
 ---

@@ -164,11 +164,11 @@ Follow-up from A0, item 3. **Shipped:** `purchaseTickets` returns `Result<Ticket
 
 - [x] **A0 applied** to `orm` and the real aggregate — no silent no-ops left; the decider follows when built.
 - [x] `PurchaseTicketsUseCase` returns a `Result` instead of a bare `Optional` (D4).
-- [ ] Lab 1D re-scoped for the availability rule that now lives in the real aggregate (A0, item 4).
+- [x] Lab 1D re-scoped for the availability rule that now lives in the real aggregate (A0, item 4).
 - [x] `orm.Concert.sellTicketsTo` exists, enforces the availability rule, and has **no** `availableTicketCount()` query method.
 - [x] `orm.Concert.rescheduleTo` guards exactly like the real aggregate.
 - [x] `orm` tests green, including the sell-path round-trip (5 tests).
 - [ ] ~~The decider package exists…~~ **Deferred to Lab 2 prep** (B1).
-- [ ] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
+- [x] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
 - [ ] `lab-0-delete-the-snapshot.md` names only members that exist **before** Lab 1A.
 - [ ] `docs/README.md` points at every current doc, and the archived plan is clearly marked as history.

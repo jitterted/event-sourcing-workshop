@@ -60,14 +60,14 @@ Do **not** pre-build these; they're what participants write:
 - `TicketsOnSale` event (add to the `ConcertEvent permits` list), `Concert.startTicketSales()`, flip `ticketsOnSale` default to `false`, add the `apply` case.
 - The **eligible-to-start-sales** read model (1A) and the **on-sale** read model (1C).
 - The **scheduled-on-sale actuator** + wherever the on-sale timestamp lives (1B).
-- The **sold-out derivation** in the buyer read model (1D), and the optional `sellTicketsTo` → auto-`TicketSalesStopped` on sell-out.
+- The **sold-out derivation** in the buyer read model (1D), and the optional `sellTicketsTo` → auto-`TicketSalesStopped` on sell-out. (The availability *rejection* itself is already built; don't strip it.)
 
 ## A7. Pre-flight check
 App boots · `/concerts` renders · `/manage/concerts` renders with Start buttons (clicking Start throws the TODO — expected) · I/O-Free Tests green.
 
 ## Decisions to lock before delivery (so you're unblocked offline)
 1. **Where the on-sale timestamp lives (1B)** — a field on `ScheduleParams`/`ConcertScheduled`, or a separate `ScheduleTicketSales` command + event? (Recommend a separate command/event so scheduling and on-sale stay independent — reinforces the LO.)
-2. **1D sell-out behavior** — display-only `soldOut` flag, or also emit `TicketSalesStopped` when `availableTicketCount` hits 0? (Recommend flag-only first; auto-stop as a stretch.)
+2. **1D sell-out behavior** — display-only `soldOut` flag, or also emit `TicketSalesStopped` when `availableTicketCount` hits 0? (Recommend flag-only first; auto-stop as a stretch.) Note the oversell *rejection* already exists in `Concert.sellTicketsTo`; only the auto-stop is open.
 3. **Management route name** — `/manage/concerts` vs something in your house style.
 
 ---
@@ -112,10 +112,10 @@ App boots · `/concerts` renders · `/manage/concerts` renders with Start button
 - **Pitfalls:** management screen still on the placeholder query; Start and Stop lists derive from the same events but **opposite predicates**.
 
 ### 1D — Sold-out display
-- **Participant tasks:** fold `TicketsSold` vs `capacity` in the buyer read model; expose `soldOut`; **keep** sold-out concerts in the list (don't remove them); the template already hides Buy + shows the badge **[BUILD]**. Optional stretch: `sellTicketsTo` emits `TicketSalesStopped` at zero available.
+- **Participant tasks:** fold `TicketsSold` vs `capacity` in the buyer read model; expose `soldOut`; **keep** sold-out concerts in the list (don't remove them); the template already hides Buy + shows the badge **[BUILD]**. **Already in the aggregate (don't ask participants to write it):** `Concert.sellTicketsTo` rejects `quantity > availableTicketCount` with `NOT_ENOUGH_TICKETS_AVAILABLE`, so an oversell can't happen. 1D is only the *display* of sold-out, derived in the read model. Optional stretch: `sellTicketsTo` emits `TicketSalesStopped` when availability reaches zero (the `// TODO: have we sold out?` in the aggregate).
 - **GWT to land:** read-model test — scheduled(capacity=N) + `TicketsSold(N)` ⇒ concert present with `soldOut=true`; Buy hidden.
 - **Debrief atom:** projection-time vs read-time filtering; **sold-out is derived state** (from events), not a stored flag.
-- **Pitfalls:** removing sold-out from the list instead of flagging it; trying to derive `soldOut` from `now()` (it's from events); double-counting `TicketsSold`.
+- **Pitfalls:** removing sold-out from the list instead of flagging it; trying to derive `soldOut` from `now()` (it's from events); double-counting `TicketsSold`; conflating *sold out* (capacity exhausted) with *sales stopped* (`ticketsOnSale = false`) — if the stretch is done, both become true for the same concert, but they stay separate facts.
 
 ## B3. Online logistics
 - Breakouts of **2–3**, rotate a driver; keep the scaffold running on **your** machine to re-demo each screen.

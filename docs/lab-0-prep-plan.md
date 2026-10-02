@@ -171,4 +171,4 @@ Follow-up from A0, item 3. **Shipped:** `purchaseTickets` returns `Result<Ticket
 - [ ] ~~The decider package exists…~~ **Deferred to Lab 2 prep** (B1).
 - [x] The three LO3 atoms are corrected in **both** `knowledge-map.md` and `knowledge-map.html`.
 - [x] `lab-0-delete-the-snapshot.md` names only members that exist **before** Lab 1A.
-- [ ] `docs/README.md` points at every current doc, and the archived plan is clearly marked as history.
+- [x] `docs/README.md` points at every current doc, and the archived plan is clearly marked as history.

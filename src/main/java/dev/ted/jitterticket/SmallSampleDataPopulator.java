@@ -22,7 +22,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-//@Component
 public class SmallSampleDataPopulator implements ApplicationRunner {
     private static final Logger LOGGER = LoggerFactory.getLogger(SmallSampleDataPopulator.class);
 

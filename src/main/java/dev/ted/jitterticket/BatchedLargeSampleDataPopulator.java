@@ -14,17 +14,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Creates the same shape of data as {@link LargeSampleDataPopulator}, but bypasses
@@ -101,15 +96,17 @@ public class BatchedLargeSampleDataPopulator implements ApplicationRunner {
         for (int i = 0; i < count; i++) {
             ConcertId concertId = ConcertId.createRandom();
             String artist = ARTISTS[random.nextInt(ARTISTS.length)] + " " + i;
-            int price = 20 + random.nextInt(180);
+            int price = 20 + random.nextInt(30) * 5; // 20 to 170 by fives
             int capacity = (CUSTOMERS_TO_CREATE * 4) + random.nextInt(5000);
+            int showHour = random.nextInt(3) + 18; // either 18, 19, or 20 starting hour
+            int showMinute = random.nextInt(2) * 30; // either :00 or :30
             append(concertId.id(), new ConcertScheduled(
                     concertId,
                     null,
                     artist,
                     price,
-                    daysFromNowAt(showDayOffsets.get(i), 19, 0),
-                    LocalTime.of(18, 0),
+                    daysFromNowAt(showDayOffsets.get(i), showHour, showMinute),
+                    LocalTime.of(showHour - 1, showMinute),
                     capacity,
                     10));
             concerts.add(new ConcertInfo(concertId, artist, price));

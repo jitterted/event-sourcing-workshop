@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -103,6 +104,7 @@ public class LargeSampleDataPopulator implements ApplicationRunner {
 
     private List<Concert> createConcertObjects(int count) {
         List<Concert> concerts = new ArrayList<>();
+        List<Integer> showDayOffsets = distinctShowDayOffsets(count);
         for (int i = 0; i < count; i++) {
             String artist = ARTISTS[random.nextInt(ARTISTS.length)] + " " + i;
             int price = 20 + random.nextInt(180);
@@ -111,13 +113,23 @@ public class LargeSampleDataPopulator implements ApplicationRunner {
                     ConcertId.createRandom(),
                     artist,
                     price,
-                    daysFromNowAt(10 + random.nextInt(CONCERTS_TO_CREATE), 19, 0),
+                    daysFromNowAt(showDayOffsets.get(i), 19, 0),
                     LocalTime.of(18, 0),
                     capacity,
                     10
             ));
         }
         return concerts;
+    }
+
+    // one concert per day: draw distinct offsets from a pool twice as wide as needed
+    private List<Integer> distinctShowDayOffsets(int count) {
+        List<Integer> candidateDays = new ArrayList<>();
+        for (int day = 10; day < 10 + 2 * count; day++) {
+            candidateDays.add(day);
+        }
+        Collections.shuffle(candidateDays, random);
+        return candidateDays.subList(0, count);
     }
 
     private static LocalDateTime daysFromNowAt(long days, int hour, int minute) {

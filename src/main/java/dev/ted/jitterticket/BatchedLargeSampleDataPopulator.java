@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -31,12 +32,11 @@ import java.util.UUID;
  * batched JDBC inserts, so no event consumers (projectors, processors) are notified,
  * and memory use stays flat regardless of the number of customers and concerts.
  */
-//@Component
 public class BatchedLargeSampleDataPopulator implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BatchedLargeSampleDataPopulator.class);
-    private static final int CUSTOMERS_TO_CREATE = 10_000; // 100_000
-    private static final int CONCERTS_TO_CREATE = 100; // 200
+    private static final int CUSTOMERS_TO_CREATE = 1_000; // 100_000
+    private static final int CONCERTS_TO_CREATE = 50; // 200
     private static final int BATCH_SIZE = 5_000;
     private static final String INSERT_EVENT_SQL =
             "INSERT INTO events (aggregate_root_id, event_type, json) VALUES (?, ?, ?)";
@@ -97,6 +97,7 @@ public class BatchedLargeSampleDataPopulator implements ApplicationRunner {
 
     private List<ConcertInfo> scheduleConcerts(int count) {
         List<ConcertInfo> concerts = new ArrayList<>();
+        List<Integer> showDayOffsets = distinctShowDayOffsets(count);
         for (int i = 0; i < count; i++) {
             ConcertId concertId = ConcertId.createRandom();
             String artist = ARTISTS[random.nextInt(ARTISTS.length)] + " " + i;
@@ -107,7 +108,7 @@ public class BatchedLargeSampleDataPopulator implements ApplicationRunner {
                     null,
                     artist,
                     price,
-                    daysFromNowAt(10 + random.nextInt(CONCERTS_TO_CREATE), 19, 0),
+                    daysFromNowAt(showDayOffsets.get(i), 19, 0),
                     LocalTime.of(18, 0),
                     capacity,
                     10));
@@ -163,6 +164,16 @@ public class BatchedLargeSampleDataPopulator implements ApplicationRunner {
                                      ps.setString(3, dto.getJson());
                                  });
         pendingEvents.clear();
+    }
+
+    // one concert per day: draw distinct offsets from a pool twice as wide as needed
+    private List<Integer> distinctShowDayOffsets(int count) {
+        List<Integer> candidateDays = new ArrayList<>();
+        for (int day = 10; day < 10 + 2 * count; day++) {
+            candidateDays.add(day);
+        }
+        Collections.shuffle(candidateDays, random);
+        return candidateDays.subList(0, count);
     }
 
     private static LocalDateTime daysFromNowAt(long days, int hour, int minute) {

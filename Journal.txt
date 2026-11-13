@@ -199,7 +199,7 @@ Notes from obsolete tests in ConcertSalesProjectionMediatorTest:
              store TicketsPurchased event (optional)
 
     * Different assertion comparison methods:
-                   var actualMap = concertSalesProjector
+                   var actualMap = concertSalesReadModel
                            .allSalesSummaries()
                            .collect(Collectors.toMap(ConcertSalesProjector.ConcertSalesSummary::artist, Function.identity()));
                    var expectedMap = Map.of(expectedSummary1.artist(), expectedSummary1,
@@ -210,7 +210,7 @@ Notes from obsolete tests in ConcertSalesProjectionMediatorTest:
 
         List comparison highlights mismatched fields, but uses [0] and [1] to reference elements, which is potentially unhelpful with longer lists
                    List<ConcertSalesProjector.ConcertSalesSummary> actualList =
-                           concertSalesProjector.allSalesSummaries()
+                           concertSalesReadModel.allSalesSummaries()
                                                 .sorted(Comparator.comparing(summary -> summary.concertId().id()))
                                                 .toList();
                    List<ConcertSalesProjector.ConcertSalesSummary> expectedList =
@@ -223,7 +223,7 @@ Notes from obsolete tests in ConcertSalesProjectionMediatorTest:
                            .isEqualTo(expectedList);
 
         unhelpful assertion failure output
-                   assertThat(concertSalesProjector.allSalesSummaries())
+                   assertThat(concertSalesReadModel.allSalesSummaries())
                            .usingRecursiveFieldByFieldElementComparator()
                            .containsExactly(expectedSummary1, expectedSummary2);
 

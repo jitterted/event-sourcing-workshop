@@ -50,7 +50,7 @@ Mirror `ScheduleConcertController` + `schedule-concert.html`.
 - Leave the **derivation** (folding `TicketsSold` vs `capacity`) to participants in 1D — you're only laying the view rails.
 
 ## A5. Seams to confirm, not build [CONFIRM]
-- **New read model pattern:** `ProjectionConfiguration` bean + `AvailableConcertsProjector` + `MemoryAvailableConcertsProjectionPersistence` is the copy-paste template.
+- **New read model pattern:** `ProjectionConfiguration` bean + `AvailableConcertsProjector` + `MemoryAvailableConcertsReadModelPersistence` is the copy-paste template.
 - **Time:** `Clock` is injectable; `ClockFactory.fixedClockAt(y,m,d)` exists for tests (1B).
 - **Actuator:** `ConcertStartedProcessor` arms a `ScheduledFuture` at a time → fires a command; registered in `ProcessorConfiguration`. Template for 1B.
 - **GWT harness:** `Concert.reconstitute(List<events>)` / `concert.uncommittedEvents()` / `MakeEvents` / `ConcertFactory` — ready.

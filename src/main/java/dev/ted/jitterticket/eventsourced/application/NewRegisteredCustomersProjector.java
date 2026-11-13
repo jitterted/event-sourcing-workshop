@@ -3,7 +3,7 @@ package dev.ted.jitterticket.eventsourced.application;
 import dev.ted.jitterticket.eventsourced.domain.customer.CustomerRegistered;
 
 public class NewRegisteredCustomersProjector
-        extends NewDomainProjector<AllRegisteredCustomers, NewlyRegisteredCustomers> {
+        extends ReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers> {
 
     private final AllRegisteredCustomers currentState;
     private NewlyRegisteredCustomers deltaState = new NewlyRegisteredCustomers();
@@ -35,7 +35,7 @@ public class NewRegisteredCustomersProjector
     }
 
     @Override
-    public Checkpointed<AllRegisteredCustomers> projection() {
+    public Checkpointed<AllRegisteredCustomers> current() {
         return new Checkpointed<>(currentState, checkpoint);
     }
 

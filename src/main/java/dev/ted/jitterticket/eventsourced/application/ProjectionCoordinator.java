@@ -8,24 +8,24 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-public class ProjectionCoordinator<EVENT extends Event, STATE, DELTA extends ProjectionDelta>
+public class ProjectionCoordinator<EVENT extends Event, STATE, DELTA extends ReadModelDelta>
         implements EventStreamConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectionCoordinator.class);
     private final DomainProjector<STATE, DELTA> domainProjector;
-    private final ProjectionPersistencePort<STATE, DELTA> projectionPersistencePort;
+    private final ReadModelPersistencePort<STATE, DELTA> readModelPersistencePort;
     private final EventStore<?, EVENT, ?> eventStore;
     private STATE cachedProjection;
     private Checkpoint cachedCheckpoint;
 
     public ProjectionCoordinator(DomainProjector<STATE, DELTA> domainProjector,
-                                 ProjectionPersistencePort<STATE, DELTA> projectionPersistencePort,
+                                 ReadModelPersistencePort<STATE, DELTA> readModelPersistencePort,
                                  EventStore<?, EVENT, ?> eventStore) {
         this.domainProjector = domainProjector;
-        this.projectionPersistencePort = projectionPersistencePort;
+        this.readModelPersistencePort = readModelPersistencePort;
         this.eventStore = eventStore;
 
-        var snapshot = projectionPersistencePort.loadSnapshot();
+        var snapshot = readModelPersistencePort.loadSnapshot();
         cachedProjection = snapshot.state();
         cachedCheckpoint = snapshot.checkpoint();
 
@@ -62,7 +62,7 @@ public class ProjectionCoordinator<EVENT extends Event, STATE, DELTA extends Pro
 
         if (updatedCheckpoint.newerThan(cachedCheckpoint)) {
             cachedCheckpoint = updatedCheckpoint;
-            projectionPersistencePort.saveDelta(
+            readModelPersistencePort.saveDelta(
                     new Checkpointed<>(projectorResult.delta(), updatedCheckpoint));
         }
     }

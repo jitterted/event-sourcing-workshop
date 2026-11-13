@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-class ConcertSalesProjectorTest {
+class ConcertSalesReadModelTest {
 
     private static final int MAX_CAPACITY = 100;
     private static final int MAX_TICKETS_PER_PURCHASE = 8;
@@ -27,22 +27,22 @@ class ConcertSalesProjectorTest {
 
     @Test
     void noScheduledConcertsReturnsNoSalesSummaries() {
-        ConcertSalesProjector projector = new ConcertSalesProjector();
+        ConcertSalesReadModel projector = new ConcertSalesReadModel();
 
-        ConcertSalesProjector.ProjectionResult projectionResult =
+        ConcertSalesReadModel.ReadModelResult readModelResult =
                 projector.project(Collections.emptyMap(),
                                   EMPTY_CONCERT_EVENT_STREAM, 0L);
 
-        assertThat(projectionResult.lastEventSequenceSeen())
+        assertThat(readModelResult.lastEventSequenceSeen())
                 .isZero();
-        assertThat(projectionResult.salesSummaries())
+        assertThat(readModelResult.salesSummaries())
                 .as("Expected the SET of Concert Sales to be empty")
                 .isEmpty();
     }
 
     @Test
     void singleConcertScheduledOnly_ProjectsSingleRow() {
-        ConcertSalesProjector projector = new ConcertSalesProjector();
+        ConcertSalesReadModel projector = new ConcertSalesReadModel();
         ConcertId concertId = new ConcertId(UUID.fromString("123e4567-e89b-42d3-a456-556642440000"));
         LocalDateTime showDateTime = LocalDateTime.of(2026, 1, 1, 20, 0);
         long eventSequence = 23L;
@@ -57,15 +57,15 @@ class ConcertSalesProjectorTest {
                                      MAX_TICKETS_PER_PURCHASE)
         );
 
-        ConcertSalesProjector.ProjectionResult projectionResult =
+        ConcertSalesReadModel.ReadModelResult readModelResult =
                 projector.project(Collections.emptyMap(), concertEvents, 0L);
 
-        assertThat(projectionResult.lastEventSequenceSeen())
+        assertThat(readModelResult.lastEventSequenceSeen())
                 .as("Last event sequence seen should be the event sequence of the single event processed")
                 .isEqualTo(eventSequence);
-        assertThat(projectionResult.salesSummaries())
+        assertThat(readModelResult.salesSummaries())
                 .usingRecursiveFieldByFieldElementComparator()
-                .containsExactly(new ConcertSalesProjector.ConcertSalesSummary(
+                .containsExactly(new ConcertSalesReadModel.ConcertSalesSummary(
                         concertId,
                         "The Dessy Bells",
                         showDateTime,
@@ -74,7 +74,7 @@ class ConcertSalesProjectorTest {
 
     @Test
     void singleConcertScheduled_SingleTicketPurchase_ProjectsSingleRowWithTicketSales() {
-        ConcertSalesProjector projector = new ConcertSalesProjector();
+        ConcertSalesReadModel projector = new ConcertSalesReadModel();
         ConcertId concertId = new ConcertId(UUID.fromString("123e4567-e89b-42d3-a456-556642440000"));
         LocalDateTime showDateTime = LocalDateTime.of(2026, 1, 1, 20, 0);
         long firstEventSequence = 27L;
@@ -91,15 +91,15 @@ class ConcertSalesProjectorTest {
                 new TicketsSold(concertId, secondEventSequence, 4, 4 * 75)
         );
 
-        ConcertSalesProjector.ProjectionResult projectionResult =
+        ConcertSalesReadModel.ReadModelResult readModelResult =
                 projector.project(Collections.emptyMap(), concertEvents, 0L);
 
-        assertThat(projectionResult.lastEventSequenceSeen())
+        assertThat(readModelResult.lastEventSequenceSeen())
                 .as("Last event sequence seen should be the event sequence of the last event processed")
                 .isEqualTo(secondEventSequence);
-        assertThat(projectionResult.salesSummaries())
+        assertThat(readModelResult.salesSummaries())
                 .usingRecursiveFieldByFieldElementComparator()
-                .containsExactly(new ConcertSalesProjector.ConcertSalesSummary(
+                .containsExactly(new ConcertSalesReadModel.ConcertSalesSummary(
                         concertId,
                         "The Dessy Bells",
                         showDateTime,
@@ -111,25 +111,21 @@ class ConcertSalesProjectorTest {
     void multipleConcerts_MultipleTicketsSoldPerConcert_ProjectsRowPerConcert() {
         ConcertId firstConcertId = ConcertId.createRandom();
         ConcertId secondConcertId = ConcertId.createRandom();
-        Stream<ConcertEvent> concertEventStream =
-                MakeEvents.with()
+        Stream<ConcertEvent> concertEventStream = MakeEvents.with()
                           .concertScheduled(firstConcertId, (concert) -> concert
-                                  .ticketPrice(75)
-                                  .ticketsSold(4))
+                                  .ticketPrice(75).ticketsSold(4))
                           .concertScheduled(secondConcertId, (concert) -> concert
-                                  .ticketPrice(50)
-                                  .ticketsSold(2)
-                                  .ticketsSold(5))
-                          .stream();
+                                  .ticketPrice(50).ticketsSold(2).ticketsSold(5))
+                .stream();
 
-        ConcertSalesProjector projector = new ConcertSalesProjector();
-        ConcertSalesProjector.ProjectionResult projectionResult =
-                projector.project(Collections.emptyMap(), concertEventStream, 0L);
+        ConcertSalesReadModel readModel = new ConcertSalesReadModel();
+        ConcertSalesReadModel.ReadModelResult readModelResult =
+                readModel.project(Collections.emptyMap(), concertEventStream, 0L);
 
-        assertThat(projectionResult.salesSummaries())
-                .extracting(ConcertSalesProjector.ConcertSalesSummary::concertId,
-                            ConcertSalesProjector.ConcertSalesSummary::totalQuantity,
-                            ConcertSalesProjector.ConcertSalesSummary::totalSales)
+        assertThat(readModelResult.salesSummaries())
+                .extracting(ConcertSalesReadModel.ConcertSalesSummary::concertId,
+                            ConcertSalesReadModel.ConcertSalesSummary::totalQuantity,
+                            ConcertSalesReadModel.ConcertSalesSummary::totalSales)
                 .containsExactlyInAnyOrder(
                         tuple(firstConcertId, 4, 75 * 4),
                         tuple(secondConcertId, 2 + 5, 50 * (2 + 5)));
@@ -146,14 +142,14 @@ class ConcertSalesProjectorTest {
                           .reschedule(concertId, newShowDateTime, newDoorsTime)
                           .stream();
 
-        ConcertSalesProjector concertSalesProjector = new ConcertSalesProjector();
-        ConcertSalesProjector.ProjectionResult projectionResult =
-                concertSalesProjector.project(Collections.emptyMap(),
+        ConcertSalesReadModel concertSalesReadModel = new ConcertSalesReadModel();
+        ConcertSalesReadModel.ReadModelResult readModelResult =
+                concertSalesReadModel.project(Collections.emptyMap(),
                                               concertEventStream, 0L);
 
-        assertThat(projectionResult.salesSummaries())
-                .extracting(ConcertSalesProjector.ConcertSalesSummary::concertId,
-                            ConcertSalesProjector.ConcertSalesSummary::showDateTime)
+        assertThat(readModelResult.salesSummaries())
+                .extracting(ConcertSalesReadModel.ConcertSalesSummary::concertId,
+                            ConcertSalesReadModel.ConcertSalesSummary::showDateTime)
                 .containsExactly(
                         tuple(concertId, newShowDateTime)
                 );
@@ -174,19 +170,19 @@ class ConcertSalesProjectorTest {
         ConcertEvent concertScheduledEvent = concertScheduledWithTicketsSoldEvents.getFirst();
         ConcertEvent ticketsSoldEvent = concertScheduledWithTicketsSoldEvents.getLast();
 
-        ConcertSalesProjector projector = new ConcertSalesProjector();
-        ConcertSalesProjector.ProjectionResult initialProjection =
+        ConcertSalesReadModel projector = new ConcertSalesReadModel();
+        ConcertSalesReadModel.ReadModelResult initialProjection =
                 projector.project(Collections.emptyMap(), Stream.of(concertScheduledEvent), 0L);
 
-        Map<ConcertId, ConcertSalesProjector.ConcertSalesSummary> secondSalesSummaryMap =
+        Map<ConcertId, ConcertSalesReadModel.ConcertSalesSummary> secondSalesSummaryMap =
                 mapFromProjection(initialProjection);
-        ConcertSalesProjector.ProjectionResult finalProjection =
+        ConcertSalesReadModel.ReadModelResult finalProjection =
                 projector.project(secondSalesSummaryMap, Stream.of(ticketsSoldEvent), 0L);
 
         assertThat(finalProjection.lastEventSequenceSeen())
                 .isEqualTo(ticketsSoldEvent.eventSequence());
         assertThat(finalProjection.salesSummaries())
-                .containsExactly(new ConcertSalesProjector.ConcertSalesSummary(
+                .containsExactly(new ConcertSalesReadModel.ConcertSalesSummary(
                         concertId,
                         "Artist Name",
                         showDateTime,
@@ -194,10 +190,10 @@ class ConcertSalesProjectorTest {
                 ));
     }
 
-    private static Map<ConcertId, ConcertSalesProjector.ConcertSalesSummary> mapFromProjection(ConcertSalesProjector.ProjectionResult initialProjection) {
+    private static Map<ConcertId, ConcertSalesReadModel.ConcertSalesSummary> mapFromProjection(ConcertSalesReadModel.ReadModelResult initialProjection) {
         return initialProjection.salesSummaries()
                                 .stream()
-                                .collect(Collectors.toMap(ConcertSalesProjector.ConcertSalesSummary::concertId, Function.identity()));
+                                .collect(Collectors.toMap(ConcertSalesReadModel.ConcertSalesSummary::concertId, Function.identity()));
     }
 
     @Test
@@ -205,17 +201,17 @@ class ConcertSalesProjectorTest {
         Stream<ConcertEvent> concertEvents = MakeEvents.with()
                 .concertScheduled()
                 .stream();
-        ConcertSalesProjector projector = new ConcertSalesProjector();
-        ConcertSalesProjector.ProjectionResult initialProjectionResult =
+        ConcertSalesReadModel projector = new ConcertSalesReadModel();
+        ConcertSalesReadModel.ReadModelResult initialReadModelResult =
                 projector.project(Collections.emptyMap(), concertEvents, 0L);
 
-        ConcertSalesProjector.ProjectionResult finalProjectionResult =
-                projector.project(mapFromProjection(initialProjectionResult),
-                                  Stream.empty(), initialProjectionResult.lastEventSequenceSeen());
+        ConcertSalesReadModel.ReadModelResult finalReadModelResult =
+                projector.project(mapFromProjection(initialReadModelResult),
+                                  Stream.empty(), initialReadModelResult.lastEventSequenceSeen());
 
-        assertThat(finalProjectionResult.lastEventSequenceSeen())
+        assertThat(finalReadModelResult.lastEventSequenceSeen())
                 .as("The last event sequence seen should remain unchanged when processing an empty event stream")
-                .isEqualTo(initialProjectionResult.lastEventSequenceSeen());
+                .isEqualTo(initialReadModelResult.lastEventSequenceSeen());
     }
 
     @Test
@@ -223,12 +219,12 @@ class ConcertSalesProjectorTest {
         ConcertId concertId = ConcertId.createRandom();
         TicketsSold ticketsSold = new TicketsSold(concertId, 1L, 3, 75);
 
-        ConcertSalesProjector concertSalesProjector = new ConcertSalesProjector();
-        ConcertSalesProjector.ProjectionResult projectionResult =
-                concertSalesProjector.project(Collections.emptyMap(),
+        ConcertSalesReadModel concertSalesReadModel = new ConcertSalesReadModel();
+        ConcertSalesReadModel.ReadModelResult readModelResult =
+                concertSalesReadModel.project(Collections.emptyMap(),
                                               Stream.of(ticketsSold), 0L);
 
-        assertThat(projectionResult.salesSummaries())
+        assertThat(readModelResult.salesSummaries())
                 .isEmpty();
     }
 

@@ -21,10 +21,10 @@ where sales have **not already started** (nor been stopped).
 > two straight, everything named in this document falls into one of two buckets:
 >
 > - **Already in the model** (the baseline you start from): the events
->   `ConcertScheduled`, `ConcertRescheduled`, `TicketsSold`, `TicketSalesStopped`, and
->   `TicketsPurchased`; the event-store `StoredEvent` / `Envelope` wrapper; the
->   `ConcertStartedProcessor` / `SoldOutProcessor`; and the maintained, checkpointed
->   projection machinery (`NewProjectionCoordinator`).
+> `ConcertScheduled`, `ConcertRescheduled`, `TicketsSold`, `TicketSalesStopped`, and
+> `TicketsPurchased`; the event-store `StoredEvent` / `Envelope` wrapper; the
+> `ConcertStartedProcessor` / `SoldOutProcessor`; and the maintained, checkpointed
+> projection machinery (`DurableReadModel`).
 > - **Introduced by the workshop** (proposed, *not* in the baseline code):
 >   - *First lab* — the **Start Ticket Sales** command, its `TicketsOnSale` event, and
 >     the `ConcertsEligibleToStartSales` **read model** that feeds the "Start Sales"
@@ -49,7 +49,7 @@ where sales have **not already started** (nor been stopped).
 > - Events: `ConcertScheduled`, `ConcertRescheduled`, `TicketsSold`, `TicketSalesStopped`,
 >   `TicketsPurchased`
 > - Processors: `ConcertStartedProcessor`, `SoldOutProcessor`
-> - Projection machinery: `NewProjectionCoordinator` (maintained + checkpointed)
+> - Projection machinery: `DurableReadModel` (maintained + checkpointed)
 >
 > **Deliberately NOT built pre-workshop** (they are the exercises):
 > - *Lab 1:* `TicketsOnSale` event + Start Ticket Sales command + `ConcertsEligibleToStartSales` read model
@@ -105,7 +105,7 @@ aggregate by id** and fold its entire stream, then check the rules and append.
 catch-up + subscription. Query applies `now()` at read time.
 
 Read strategy for freshness (bounded staleness — already the shape of
-`NewProjectionCoordinator`):
+`DurableReadModel`):
 
 1. Load the persisted projection + its `Checkpoint`.
 2. Fold `allEventsAfter(checkpoint, {5 types})` on top (idempotent upsert by `ConcertId`).
@@ -186,7 +186,7 @@ standard ES pattern: a scheduler turns the passage of time into an explicit fact
   `ConcertScheduled` (that's what snapshots are for).
 
 **But check whether the waste is even real.** With a **maintained + snapshotted
-projection** (exactly what `NewProjectionCoordinator` is: `loadProjector()` restores state
+projection** (exactly what `DurableReadModel` is: `loadProjector()` restores state
 *and* its `Checkpoint`, then `allEventsAfter(checkpoint, types)` tails only *new* events),
 you never re-fold the past on the steady-state path, and cold start resumes from the
 snapshot. The only per-read cost is a `now()` scan over already-reduced state — cheap. The

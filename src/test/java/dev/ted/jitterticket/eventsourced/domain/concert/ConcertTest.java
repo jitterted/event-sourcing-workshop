@@ -59,6 +59,30 @@ public class ConcertTest {
         }
 
         @Test
+        void givenConcertScheduledWhenRescheduleThenConcertRescheduled() {
+            // Given
+            ConcertId concertId = ConcertId.createRandom();
+            LocalDateTime originalShowDateTime = LocalDateTime.of(2025, 11, 11, 20, 0);
+            LocalTime originalDoorsTime = LocalTime.of(19, 0);
+            ConcertScheduled concertScheduled = new ConcertScheduled(
+                    concertId, 1L, "Headliner", 35,
+                    originalShowDateTime, originalDoorsTime, 100, 4);
+            Concert concert = Concert.reconstitute(List.of(concertScheduled));
+
+            // When
+            LocalDateTime newShowDateTime = originalShowDateTime.plusDays(1).minusHours(1);
+            LocalTime newDoorsTime = originalDoorsTime.minusHours(1);
+            concert.rescheduleTo(newShowDateTime, newDoorsTime);
+
+            // Then
+            ConcertRescheduled expectedConcertRescheduled = new ConcertRescheduled(
+                    concertId, null, newShowDateTime, newDoorsTime);
+            assertThat(concert.uncommittedEvents())
+                    .as("Rescheduling should generate exactly one ConcertRescheduled event")
+                    .containsExactly(expectedConcertRescheduled);
+        }
+
+        @Test
         void purchaseTicketsGeneratesTicketsSold() {
             int ticketPrice = 35;
             ConcertScheduled concertScheduled =
@@ -186,7 +210,7 @@ public class ConcertTest {
     private Commands commandsWith(EventStore<ConcertId, ConcertEvent, Concert> concertEventStore) {
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new ScheduledConcertsProjector(),
-                new MemoryScheduledConcertsProjectionPersistence(),
+                new MemoryScheduledConcertsReadModelPersistence(),
                 concertEventStore);
         CommandExecutorFactory commandExecutorFactory = CommandExecutorFactory.create(concertEventStore);
         return new Commands(commandExecutorFactory, projectionCoordinator);

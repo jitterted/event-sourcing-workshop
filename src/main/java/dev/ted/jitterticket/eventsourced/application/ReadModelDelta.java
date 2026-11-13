@@ -1,5 +1,5 @@
 package dev.ted.jitterticket.eventsourced.application;
 
-public interface ProjectionDelta {
+public interface ReadModelDelta {
     boolean isEmpty();
 }

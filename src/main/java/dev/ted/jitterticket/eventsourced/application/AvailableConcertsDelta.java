@@ -5,7 +5,7 @@ import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
 import java.util.List;
 
 public record AvailableConcertsDelta(List<AvailableConcert> upsertedConcerts,
-                                     List<ConcertId> removedConcertIds) implements ProjectionDelta {
+                                     List<ConcertId> removedConcertIds) implements ReadModelDelta {
 
     @Override
     public boolean isEmpty() {

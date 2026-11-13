@@ -25,14 +25,14 @@ public class ConcertSalesProjectionMediator implements EventStreamConsumer {
     private static final Logger log = LoggerFactory.getLogger(ConcertSalesProjectionMediator.class);
 
     static final String PROJECTION_NAME = "concert_sales_projector";
-    private final ConcertSalesProjector concertSalesProjector;
+    private final ConcertSalesReadModel concertSalesReadModel;
     private final EventStore<ConcertId, ConcertEvent, Concert> concertEventStore;
     private final ConcertSalesProjectionRepository concertSalesProjectionRepository;
 
-    public ConcertSalesProjectionMediator(ConcertSalesProjector concertSalesProjector,
+    public ConcertSalesProjectionMediator(ConcertSalesReadModel concertSalesReadModel,
                                           EventStore<ConcertId, ConcertEvent, Concert> concertEventStore,
                                           ConcertSalesProjectionRepository concertSalesProjectionRepository) {
-        this.concertSalesProjector = concertSalesProjector;
+        this.concertSalesReadModel = concertSalesReadModel;
         this.concertEventStore = concertEventStore;
         this.concertSalesProjectionRepository = concertSalesProjectionRepository;
 
@@ -55,8 +55,8 @@ public class ConcertSalesProjectionMediator implements EventStreamConsumer {
         concertEventStore.subscribe(this, desiredEvents);
     }
 
-    static ConcertSalesProjector.ConcertSalesSummary dboToSummary(ConcertSalesDbo concertSalesDbo) {
-        return new ConcertSalesProjector.ConcertSalesSummary(
+    static ConcertSalesReadModel.ConcertSalesSummary dboToSummary(ConcertSalesDbo concertSalesDbo) {
+        return new ConcertSalesReadModel.ConcertSalesSummary(
                 new ConcertId(concertSalesDbo.getConcertId()),
                 concertSalesDbo.getArtistName(),
                 concertSalesDbo.getConcertDate().atStartOfDay(),
@@ -65,7 +65,7 @@ public class ConcertSalesProjectionMediator implements EventStreamConsumer {
         );
     }
 
-    static ConcertSalesDbo summaryToDbo(ConcertSalesProjector.ConcertSalesSummary summary) {
+    static ConcertSalesDbo summaryToDbo(ConcertSalesReadModel.ConcertSalesSummary summary) {
         return new ConcertSalesDbo(
                 summary.concertId().id(),
                 summary.artist(),
@@ -83,16 +83,16 @@ public class ConcertSalesProjectionMediator implements EventStreamConsumer {
                         .orElse(createNewProjectionDbo());
 
         log.debug("Converting {} Sales DBOs to Sales Summaries...", concertSalesProjectionDbo.getConcertSales().size());
-        Map<ConcertId, ConcertSalesProjector.ConcertSalesSummary> salesSummaryMap =
+        Map<ConcertId, ConcertSalesReadModel.ConcertSalesSummary> salesSummaryMap =
                 concertSalesProjectionDbo.getConcertSales()
                                          .stream()
                                          .map(ConcertSalesProjectionMediator::dboToSummary)
-                                         .collect(Collectors.toMap(ConcertSalesProjector.ConcertSalesSummary::concertId,
+                                         .collect(Collectors.toMap(ConcertSalesReadModel.ConcertSalesSummary::concertId,
                                                                    Function.identity()));
 
         log.debug("Starting projection calculation...");
-        ConcertSalesProjector.ProjectionResult result =
-                concertSalesProjector.project(salesSummaryMap,
+        ConcertSalesReadModel.ReadModelResult result =
+                concertSalesReadModel.project(salesSummaryMap,
                                               eventStream,
                                               concertSalesProjectionDbo.getLastEventSequenceSeen());
         log.debug("Projection calculation completed, mapping Sales Summary to DBOs...");
@@ -116,7 +116,7 @@ public class ConcertSalesProjectionMediator implements EventStreamConsumer {
                 PROJECTION_NAME, 0L);
     }
 
-    public Stream<ConcertSalesProjector.ConcertSalesSummary> allSalesSummaries() {
+    public Stream<ConcertSalesReadModel.ConcertSalesSummary> allSalesSummaries() {
         return concertSalesProjectionRepository
                 .findById(PROJECTION_NAME)
                 .orElse(createNewProjectionDbo())

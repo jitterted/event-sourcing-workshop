@@ -24,15 +24,15 @@ public class ProjectionConfiguration {
     ProjectionCoordinator<ConcertEvent, AvailableConcerts, AvailableConcertsDelta>
     availableConcertsProjectionCoordinator(EventStore<ConcertId, ConcertEvent, Concert> concertStore) {
         return new ProjectionCoordinator<>(new AvailableConcertsProjector(),
-                                           new MemoryAvailableConcertsProjectionPersistence(),
+                                           new MemoryAvailableConcertsReadModelPersistence(),
                                            concertStore);
     }
 
     @Bean
-    NewProjectionCoordinator<AllRegisteredCustomers, NewlyRegisteredCustomers>
+    DurableReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers>
     newRegisteredCustomersProjectionCoordinator(EventStore<CustomerId, CustomerEvent, Customer> customerStore) {
-        return new NewProjectionCoordinator<>(
-                new NewMemoryRegisteredCustomersProjectionPersistence(),
+        return new DurableReadModel<>(
+                new NewMemoryRegisteredCustomersReadModelPersistence(),
                 customerStore);
     }
 
@@ -41,7 +41,7 @@ public class ProjectionConfiguration {
     ProjectionCoordinator<ConcertEvent, ScheduledConcerts, ScheduledConcertsDelta>
     scheduledConcertsProjectionCoordinator(EventStore<ConcertId, ConcertEvent, Concert> concertStore) {
         return new ProjectionCoordinator<>(new ScheduledConcertsProjector(),
-                                           new MemoryScheduledConcertsProjectionPersistence(),
+                                           new MemoryScheduledConcertsReadModelPersistence(),
                                            concertStore);
     }
 
@@ -50,7 +50,7 @@ public class ProjectionConfiguration {
             EventStore<ConcertId, ConcertEvent, Concert> concertStore,
             ConcertSalesProjectionRepository concertSalesProjectionRepository) {
         return new ConcertSalesProjectionMediator(
-                new ConcertSalesProjector(),
+                new ConcertSalesReadModel(),
                 concertStore,
                 concertSalesProjectionRepository);
     }
@@ -59,11 +59,11 @@ public class ProjectionConfiguration {
     ProjectionChoices projectionChoices(
             EventStore<ConcertId, ConcertEvent, Concert> concertStore,
             EventStore<CustomerId, CustomerEvent, Customer> customerStore,
-            NewProjectionCoordinator<AllRegisteredCustomers, NewlyRegisteredCustomers> newRegisteredCustomersProjection
+            DurableReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers> newRegisteredCustomersProjection
     ) {
         ProjectionCoordinator<ConcertEvent, AvailableConcerts, AvailableConcertsDelta> allConcertsProjection =
                 new ProjectionCoordinator<>(new AllConcertsProjector(),
-                                            new MemoryAvailableConcertsProjectionPersistence(),
+                                            new MemoryAvailableConcertsReadModelPersistence(),
                                             concertStore);
         return new ProjectionChoices(Map.of(
                 "concerts", new ConcertProjectionChoice(concertStore, allConcertsProjection),

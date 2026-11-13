@@ -1,6 +1,6 @@
 package dev.ted.jitterticket.eventsourced.adapter.out.store.jdbc;
 
-import dev.ted.jitterticket.eventsourced.application.ConcertSalesProjector;
+import dev.ted.jitterticket.eventsourced.application.ConcertSalesReadModel;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
 import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.annotation.Transient;
@@ -40,7 +40,7 @@ public class ConcertSalesDbo implements Persistable<UUID> {
         this.isNew = true;
     }
 
-    public static ConcertSalesDbo createFromSummary(ConcertSalesProjector.ConcertSalesSummary css) {
+    public static ConcertSalesDbo createFromSummary(ConcertSalesReadModel.ConcertSalesSummary css) {
         return new ConcertSalesDbo(
                 css.concertId().id(),
                 css.artist(),
@@ -50,8 +50,8 @@ public class ConcertSalesDbo implements Persistable<UUID> {
         );
     }
 
-    public ConcertSalesProjector.ConcertSalesSummary toSummary() {
-        return new ConcertSalesProjector.ConcertSalesSummary(
+    public ConcertSalesReadModel.ConcertSalesSummary toSummary() {
+        return new ConcertSalesReadModel.ConcertSalesSummary(
                 new ConcertId(getConcertId()),
                 getArtistName(),
                 getConcertDate().atStartOfDay(),

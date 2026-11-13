@@ -5,15 +5,15 @@ import org.junit.jupiter.api.Test;
 
 import static dev.ted.jitterticket.eventsourced.application.Assertions.assertThat;
 
-class ProjectionPersistencePortTest {
+class ReadModelPersistencePortTest {
 
     @Test
     void emptyPersistenceLoadsProjectorWithEmptyStateAndCheckpointAtInitial() {
-        var projectionPersistence = new NewMemoryRegisteredCustomersProjectionPersistence();
+        var projectionPersistence = new NewMemoryRegisteredCustomersReadModelPersistence();
 
-        var projector = projectionPersistence.loadProjector();
+        var projector = projectionPersistence.loadReadModel();
 
-        assertThat(projector.projection())
+        assertThat(projector.current())
                 .hasCheckpointValueOf(0)
                 .hasEmptyState();
     }
@@ -22,14 +22,14 @@ class ProjectionPersistencePortTest {
     void savedDeltaWithEmptyDeltaBumpsCheckpoint() {
         // this is the situation where a projector saw new events, but its state didn't change (non-relevant events)
         var projectionPersistence =
-                new NewMemoryRegisteredCustomersProjectionPersistence();
+                new NewMemoryRegisteredCustomersReadModelPersistence();
 
         projectionPersistence.saveDelta(
                 new Checkpointed<>(new NewlyRegisteredCustomers(), Checkpoint.of(1)));
 
-        var projector = projectionPersistence.loadProjector();
+        var projector = projectionPersistence.loadReadModel();
 
-        assertThat(projector.projection())
+        assertThat(projector.current())
                 .hasCheckpointValueOf(1)
                 .hasEmptyState();
     }
@@ -37,16 +37,16 @@ class ProjectionPersistencePortTest {
     @Test
     void deltaWithNewDataSavedToEmptyPersistenceIsReturnedInProjector() {
         var projectionPersistence =
-                new NewMemoryRegisteredCustomersProjectionPersistence();
+                new NewMemoryRegisteredCustomersReadModelPersistence();
 
         RegisteredCustomer registeredCustomer = new RegisteredCustomer(CustomerId.createRandom(), "Customer Name");
         NewlyRegisteredCustomers delta = NewlyRegisteredCustomers
                 .createForTestWith(registeredCustomer);
         projectionPersistence.saveDelta(new Checkpointed<>(delta, Checkpoint.of(1)));
 
-        var projector = projectionPersistence.loadProjector();
+        var projector = projectionPersistence.loadReadModel();
 
-        assertThat(projector.projection())
+        assertThat(projector.current())
                 .hasCheckpointValueOf(1)
                 .state()
                 .isEqualTo(AllRegisteredCustomers.of(registeredCustomer));
@@ -54,7 +54,7 @@ class ProjectionPersistencePortTest {
 
     @Test
     void savedDeltaIsMergedWithExistingState() {
-        var projectionPersistence = new NewMemoryRegisteredCustomersProjectionPersistence();
+        var projectionPersistence = new NewMemoryRegisteredCustomersReadModelPersistence();
         Checkpoint checkpoint = Checkpoint.of(1);
         projectionPersistence.saveDelta(
                 new Checkpointed<>(createDeltaWith("Existing Customer"
@@ -65,12 +65,12 @@ class ProjectionPersistencePortTest {
         );
         projectionPersistence.saveDelta(new Checkpointed<>(delta, deltaCheckpoint));
 
-        var projector = projectionPersistence.loadProjector();
+        var projector = projectionPersistence.loadReadModel();
 
-        assertThat(projector.projection())
+        assertThat(projector.current())
                 .hasCheckpointValueOf(2);
 
-        assertThat(projector.projection().state().asList())
+        assertThat(projector.current().state().asList())
                 .extracting(RegisteredCustomer::name)
                 .contains("Existing Customer", "New Customer");
     }

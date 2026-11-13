@@ -6,7 +6,7 @@ import java.util.List;
 
 public record ScheduledConcertsDelta(List<ScheduledConcert> upsertedConcerts,
                                      List<ConcertId> removedConcertIds)
-        implements ProjectionDelta {
+        implements ReadModelDelta {
 
     @Override
     public boolean isEmpty() {

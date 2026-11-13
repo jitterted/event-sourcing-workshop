@@ -1,7 +1,7 @@
 package dev.ted.jitterticket.eventviewer.adapter.in.web;
 
 import dev.ted.jitterticket.eventsourced.application.AllRegisteredCustomers;
-import dev.ted.jitterticket.eventsourced.application.NewProjectionCoordinator;
+import dev.ted.jitterticket.eventsourced.application.DurableReadModel;
 import dev.ted.jitterticket.eventsourced.application.NewlyRegisteredCustomers;
 import dev.ted.jitterticket.eventsourced.application.port.EventStore;
 import dev.ted.jitterticket.eventsourced.domain.Event;
@@ -14,11 +14,11 @@ import java.util.UUID;
 
 public class NewCustomerProjectionChoice extends ProjectionChoice {
     private final EventStore<CustomerId, CustomerEvent, Customer> customerStore;
-    private final NewProjectionCoordinator<AllRegisteredCustomers, NewlyRegisteredCustomers> registeredCustomersProjection;
+    private final DurableReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers> registeredCustomersProjection;
 
     public NewCustomerProjectionChoice(
             EventStore<CustomerId, CustomerEvent, Customer> customerStore,
-            NewProjectionCoordinator<AllRegisteredCustomers, NewlyRegisteredCustomers> newRegisteredCustomersProjection
+            DurableReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers> newRegisteredCustomersProjection
     ) {
         super("Customer", "customers");
         this.customerStore = customerStore;

@@ -16,12 +16,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
-public class ConcertSalesProjector {
-    private static final Logger log = LoggerFactory.getLogger(ConcertSalesProjector.class);
+public class ConcertSalesReadModel {
+    private static final Logger log = LoggerFactory.getLogger(ConcertSalesReadModel.class);
 
-    ProjectionResult project(Map<ConcertId, ConcertSalesSummary> salesSummaryMap,
-                             Stream<? extends Event> concertEvents,
-                             long lastEventSequenceSeen) {
+    ReadModelResult project(Map<ConcertId, ConcertSalesSummary> salesSummaryMap,
+                            Stream<? extends Event> concertEvents,
+                            long lastEventSequenceSeen) {
         Map<ConcertId, ConcertSalesSummary> mutableMap = new HashMap<>(salesSummaryMap);
 
         AtomicReference<Long> lastEventSequenceSeenRef = new AtomicReference<>(lastEventSequenceSeen);
@@ -51,12 +51,12 @@ public class ConcertSalesProjector {
                 });
 
         log.debug("Projection calculation completed, processed {} events", eventSequenceCounter.get());
-        return new ProjectionResult(mutableMap.values(),
+        return new ReadModelResult(mutableMap.values(),
                                     lastEventSequenceSeenRef.get());
     }
 
-    record ProjectionResult(Collection<ConcertSalesSummary> salesSummaries,
-                            long lastEventSequenceSeen) {}
+    record ReadModelResult(Collection<ConcertSalesSummary> salesSummaries,
+                           long lastEventSequenceSeen) {}
 
 
     public record ConcertSalesSummary(

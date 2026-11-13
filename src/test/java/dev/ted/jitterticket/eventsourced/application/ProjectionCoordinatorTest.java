@@ -17,7 +17,7 @@ class ProjectionCoordinatorTest {
     void projectionIsEmptyWhenNoCustomersAreRegistered() {
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
-                new MemoryRegisteredCustomersProjectionPersistence(),
+                new MemoryRegisteredCustomersReadModelPersistence(),
                 InMemoryEventStore.forCustomers()
         );
 
@@ -33,7 +33,7 @@ class ProjectionCoordinatorTest {
 
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
-                new MemoryRegisteredCustomersProjectionPersistence(),
+                new MemoryRegisteredCustomersReadModelPersistence(),
                 customerStore
         );
 
@@ -50,7 +50,7 @@ class ProjectionCoordinatorTest {
         customerStore.save(Customer.register(
                 existingCustomerId, "Existing Customer", IRRELEVANT_EMAIL));
         // catch up on new customer registered
-        MemoryRegisteredCustomersProjectionPersistence projectionPersistence = new MemoryRegisteredCustomersProjectionPersistence();
+        MemoryRegisteredCustomersReadModelPersistence projectionPersistence = new MemoryRegisteredCustomersReadModelPersistence();
         new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
                 projectionPersistence,
@@ -74,7 +74,7 @@ class ProjectionCoordinatorTest {
 
     @Test
     void handleEmptyStreamPreservesPersistedCheckpoint() {
-        var projectionPersistence = new ConfigurableCrashingProjectionPersistence(1);
+        var projectionPersistence = new ConfigurableCrashingReadModelPersistence(1);
         var customerStore = InMemoryEventStore.forCustomers();
         CustomerId customerId = CustomerId.createRandom();
         var projectionCoordinator = new ProjectionCoordinator<>(
@@ -101,7 +101,7 @@ class ProjectionCoordinatorTest {
         customerStore.save(Customer.register(existingCustomerId, "Existing Customer", IRRELEVANT_EMAIL));
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
-                new MemoryRegisteredCustomersProjectionPersistence(),
+                new MemoryRegisteredCustomersReadModelPersistence(),
                 customerStore
         );
 
@@ -113,7 +113,7 @@ class ProjectionCoordinatorTest {
     @Disabled("Not sure that this test is relevant, it's replaying an already processed event, it's not an 'inconsistent' stream")
     void inconsistentEventStreamsCauseCheckpointRegressionIfCachedCheckpointIsNotUpdated() {
         var customerEventStore = InMemoryEventStore.forCustomers();
-        var projectionPersistence = new MemoryRegisteredCustomersProjectionPersistence();
+        var projectionPersistence = new MemoryRegisteredCustomersReadModelPersistence();
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
                 projectionPersistence,
@@ -143,7 +143,7 @@ class ProjectionCoordinatorTest {
         customerStore.save(Customer.register(firstCustomerId, "First Customer", "first@example.com"));
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
-                new MemoryRegisteredCustomersProjectionPersistence(),
+                new MemoryRegisteredCustomersReadModelPersistence(),
                 customerStore
         );
 
@@ -172,8 +172,8 @@ class ProjectionCoordinatorTest {
 
     @Test
     void projectionLoadsNonEmptySnapshotUponCreation() {
-        MemoryRegisteredCustomersProjectionPersistence projectionPersistence =
-                new MemoryRegisteredCustomersProjectionPersistence();
+        MemoryRegisteredCustomersReadModelPersistence projectionPersistence =
+                new MemoryRegisteredCustomersReadModelPersistence();
         RegisteredCustomers delta = RegisteredCustomers.createForTestWith(
                 new RegisteredCustomer(
                         CustomerId.createRandom(),
@@ -193,8 +193,8 @@ class ProjectionCoordinatorTest {
 
     @Test
     void projectionDoesNotApplyEventsAlreadyProcessedInSnapshot() {
-        MemoryRegisteredCustomersProjectionPersistence projectionPersistence =
-                new MemoryRegisteredCustomersProjectionPersistence();
+        MemoryRegisteredCustomersReadModelPersistence projectionPersistence =
+                new MemoryRegisteredCustomersReadModelPersistence();
         CustomerId snapshottedCustomerId = CustomerId.createRandom();
         String snapshottedCustomerName = "Snapshotted Customer";
         RegisteredCustomers delta = RegisteredCustomers.createForTestWith(
@@ -222,8 +222,8 @@ class ProjectionCoordinatorTest {
 
     @Test
     void projectionPersistedAfterUpdatedAfterCatchUp() {
-        MemoryRegisteredCustomersProjectionPersistence projectionPersistence =
-                new MemoryRegisteredCustomersProjectionPersistence();
+        MemoryRegisteredCustomersReadModelPersistence projectionPersistence =
+                new MemoryRegisteredCustomersReadModelPersistence();
         var customerEventStore = InMemoryEventStore.forCustomers();
         CustomerId customerId = CustomerId.createRandom();
         String customerName = "Catchup Customer";
@@ -286,7 +286,7 @@ class ProjectionCoordinatorTest {
 
     private static Fixture createEmptyProjectionCoordinator() {
         var customerEventStore = InMemoryEventStore.forCustomers();
-        var projectionPersistence = new MemoryRegisteredCustomersProjectionPersistence();
+        var projectionPersistence = new MemoryRegisteredCustomersReadModelPersistence();
         new ProjectionCoordinator<>(
                 new RegisteredCustomersProjector(),
                 projectionPersistence,
@@ -297,14 +297,14 @@ class ProjectionCoordinatorTest {
 
     private record Fixture(
             dev.ted.jitterticket.eventsourced.application.port.EventStore<CustomerId, dev.ted.jitterticket.eventsourced.domain.customer.CustomerEvent, Customer> customerEventStore,
-            MemoryRegisteredCustomersProjectionPersistence projectionPersistence) {}
+            MemoryRegisteredCustomersReadModelPersistence projectionPersistence) {}
 
-    private static class ConfigurableCrashingProjectionPersistence extends MemoryRegisteredCustomersProjectionPersistence {
+    private static class ConfigurableCrashingReadModelPersistence extends MemoryRegisteredCustomersReadModelPersistence {
 
         private final int saveDeltaAttemptsBeforeCrash;
         private int saveDeltaAttemptCount = 0;
 
-        public ConfigurableCrashingProjectionPersistence(int saveDeltaAttemptsBeforeCrash) {
+        public ConfigurableCrashingReadModelPersistence(int saveDeltaAttemptsBeforeCrash) {
             this.saveDeltaAttemptsBeforeCrash = saveDeltaAttemptsBeforeCrash;
         }
 

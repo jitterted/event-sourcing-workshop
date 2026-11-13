@@ -6,24 +6,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MemoryScheduledConcertsProjectionPersistence
-        implements ProjectionPersistencePort<ScheduledConcerts, ScheduledConcertsDelta> {
+public class MemoryAvailableConcertsReadModelPersistence
+        implements ReadModelPersistencePort<AvailableConcerts, AvailableConcertsDelta> {
 
     private Checkpoint checkpoint = Checkpoint.INITIAL;
-    private final Map<ConcertId, ScheduledConcert> state = new HashMap<>();
+    private final Map<ConcertId, AvailableConcert> state = new HashMap<>();
 
     @Override
-    public Checkpointed<ScheduledConcerts> loadSnapshot() {
-        return new Checkpointed<>(new ScheduledConcerts(List.copyOf(state.values())), checkpoint);
+    public Checkpointed<AvailableConcerts> loadSnapshot() {
+        return new Checkpointed<>(new AvailableConcerts(List.copyOf(state.values())), checkpoint);
     }
 
     @Override
-    public NewDomainProjector<ScheduledConcerts, ScheduledConcertsDelta> loadProjector() {
+    public ReadModel<AvailableConcerts, AvailableConcertsDelta> loadReadModel() {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void saveDelta(Checkpointed<ScheduledConcertsDelta> checkpointed) {
+    public void saveDelta(Checkpointed<AvailableConcertsDelta> checkpointed) {
         checkpointed.state().upsertedConcerts().forEach(concert -> state.put(concert.concertId(), concert));
         checkpointed.state().removedConcertIds().forEach(state::remove);
         this.checkpoint = checkpointed.checkpoint();

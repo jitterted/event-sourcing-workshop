@@ -1,7 +1,7 @@
 package dev.ted.jitterticket.eventsourced.application;
 
-public class NewMemoryRegisteredCustomersProjectionPersistence
-        implements ProjectionPersistencePort<AllRegisteredCustomers, NewlyRegisteredCustomers> {
+public class NewMemoryRegisteredCustomersReadModelPersistence
+        implements ReadModelPersistencePort<AllRegisteredCustomers, NewlyRegisteredCustomers> {
 
     private Checkpoint checkpoint = Checkpoint.INITIAL;
     private final AllRegisteredCustomers state = new AllRegisteredCustomers();
@@ -13,7 +13,7 @@ public class NewMemoryRegisteredCustomersProjectionPersistence
     }
 
     @Override
-    public NewDomainProjector<AllRegisteredCustomers, NewlyRegisteredCustomers> loadProjector() {
+    public ReadModel<AllRegisteredCustomers, NewlyRegisteredCustomers> loadReadModel() {
         Checkpointed<AllRegisteredCustomers> snapshot = loadSnapshot();
         return new NewRegisteredCustomersProjector(snapshot);
     }

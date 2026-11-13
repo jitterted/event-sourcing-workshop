@@ -27,7 +27,7 @@ class ScheduleConcertController {
         var concertEventStore = InMemoryEventStore.forConcerts();
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new ScheduledConcertsProjector(),
-                new MemoryScheduledConcertsProjectionPersistence(),
+                new MemoryScheduledConcertsReadModelPersistence(),
                 concertEventStore);
         Commands commands = new Commands(
                 CommandExecutorFactory.create(concertEventStore),

@@ -1,5 +1,31 @@
 -- noinspection GrazieInspectionForFile
 
+--     CREATE TABLE IF NOT EXISTS events (
+--         -- Global position in the log, gaps (skipped numbers) are OK
+--         event_sequence BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+--         -- Primary subject of the event; doesn't define an aggregate-like consistency boundary.
+--         subject_id     UUID                     NOT NULL,
+--         -- Stable across retries of the same event.
+--         event_id       UUID                     NOT NULL UNIQUE,
+--         -- Logical name used for deserialization into records or classes.
+--         event_type     TEXT                     NOT NULL,
+--         -- Tags used to select events for live decision contexts and read models.
+--         tags           TEXT[]                   NOT NULL DEFAULT '{}',
+--         -- Could be stored as TEXT as event payloads shouldn't be queried in the database
+--         payload        JSONB                    NOT NULL,
+--         -- Supports schema migration: the version of this event
+--         schema_version INTEGER                  NOT NULL,
+--         -- Time INSERT statement started: if event-creation (command execution) time is needed,
+--         -- that should be inside the event payload itself (i.e., business information).
+--         created_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT statement_timestamp()
+--     );
+--
+-- CREATE INDEX events_subject_sequence_idx
+--     ON events (subject_id, event_sequence);
+--
+-- CREATE INDEX events_tags_idx
+--     ON events USING GIN (tags);
+--
 -- Events table for storing event-sourced aggregates
 CREATE TABLE IF NOT EXISTS events (
     aggregate_root_id UUID NOT NULL,

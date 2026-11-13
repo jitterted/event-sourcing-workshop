@@ -4,7 +4,7 @@ Replace in place — no `New…` copy alongside. (The `NewRegisteredCustomersPro
 old `RegisteredCustomersProjector` pair as dead code still referenced only by tests; don't grow a
 second orphan.)
 
-**Why:** `NewProjectionCoordinator` filters the catch-up query by `domainProjector.handledEventTypes()`,
+**Why:** `DurableReadModel` filters the catch-up query by `domainProjector.handledEventTypes()`,
 which `EventHandler` derives from the `handle` methods. This projection then loads ~100 events at
 startup instead of 1,000,100.
 
@@ -75,7 +75,7 @@ startup instead of 1,000,100.
   `EventDto`; startup 15.6s → 8.2s versus Spring Data JDBC's `EventDboRepository`
 - Still loading 1M events each: `AvailableConcertsProjector` and `AllConcertsProjector`.
   `AllConcertsProjector` also needs its own persistence class, since
-  `MemoryAvailableConcertsProjectionPersistence` serves two projectors and `loadProjector()` can only
+  `MemoryAvailableConcertsReadModelPersistence` serves two projectors and `loadProjector()` can only
   return one
 
 ## Note: a checkpoint should record the global sequence, not the last handled event

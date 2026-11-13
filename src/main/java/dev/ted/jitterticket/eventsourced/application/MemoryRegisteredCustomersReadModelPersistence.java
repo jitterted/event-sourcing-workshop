@@ -1,8 +1,8 @@
 package dev.ted.jitterticket.eventsourced.application;
 
 // have STATE implement a State interface that supports .isEmpty() and .merge(), which is used to merge the previous snapshot with the delta
-public class MemoryRegisteredCustomersProjectionPersistence
-        implements ProjectionPersistencePort<RegisteredCustomers, RegisteredCustomers> {
+public class MemoryRegisteredCustomersReadModelPersistence
+        implements ReadModelPersistencePort<RegisteredCustomers, RegisteredCustomers> {
 
     private Checkpoint checkpoint = Checkpoint.INITIAL;
     private RegisteredCustomers state = new RegisteredCustomers();
@@ -13,7 +13,7 @@ public class MemoryRegisteredCustomersProjectionPersistence
     }
 
     @Override
-    public NewDomainProjector<RegisteredCustomers, RegisteredCustomers> loadProjector() {
+    public ReadModel<RegisteredCustomers, RegisteredCustomers> loadReadModel() {
         throw new UnsupportedOperationException();
     }
 

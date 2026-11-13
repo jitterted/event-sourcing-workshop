@@ -3,7 +3,7 @@ package dev.ted.jitterticket.eventsourced.adapter.in.web;
 import dev.ted.jitterticket.eventsourced.adapter.out.store.jdbc.ConcertSalesProjectionRepository;
 import dev.ted.jitterticket.eventsourced.adapter.out.store.jdbc.DataJdbcContainerTest;
 import dev.ted.jitterticket.eventsourced.application.ConcertSalesProjectionMediator;
-import dev.ted.jitterticket.eventsourced.application.ConcertSalesProjector;
+import dev.ted.jitterticket.eventsourced.application.ConcertSalesReadModel;
 import dev.ted.jitterticket.eventsourced.application.InMemoryEventStore;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertFactory;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
@@ -28,7 +28,7 @@ class SalesControllerTest extends DataJdbcContainerTest {
     void salesViewShowsSummaryOfSampleDataConcertSales() {
         var concertStore = InMemoryEventStore.forConcerts();
         ConcertSalesProjectionMediator concertSalesProjectionMediator =
-                new ConcertSalesProjectionMediator(new ConcertSalesProjector(),
+                new ConcertSalesProjectionMediator(new ConcertSalesReadModel(),
                                                    concertStore,
                                                    concertSalesProjectionRepository);
 

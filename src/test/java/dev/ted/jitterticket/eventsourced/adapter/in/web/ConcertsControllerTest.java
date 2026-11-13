@@ -2,7 +2,7 @@ package dev.ted.jitterticket.eventsourced.adapter.in.web;
 
 import dev.ted.jitterticket.eventsourced.application.AvailableConcertsProjector;
 import dev.ted.jitterticket.eventsourced.application.InMemoryEventStore;
-import dev.ted.jitterticket.eventsourced.application.MemoryAvailableConcertsProjectionPersistence;
+import dev.ted.jitterticket.eventsourced.application.MemoryAvailableConcertsReadModelPersistence;
 import dev.ted.jitterticket.eventsourced.application.ProjectionCoordinator;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertFactory;
 import dev.ted.jitterticket.eventsourced.domain.concert.ConcertId;
@@ -30,7 +30,7 @@ class ConcertsControllerTest {
                                                              LocalTime.of(19, 0)));
         var projectionCoordinator = new ProjectionCoordinator<>(
                 new AvailableConcertsProjector(),
-                new MemoryAvailableConcertsProjectionPersistence(),
+                new MemoryAvailableConcertsReadModelPersistence(),
                 concertStore);
 
         ConcertsController concertsController = new ConcertsController(projectionCoordinator);

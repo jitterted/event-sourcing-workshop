@@ -18,7 +18,7 @@ class NewRegisteredCustomersProjectorTest {
         NewRegisteredCustomersProjector registeredCustomersProjector =
                 NewRegisteredCustomersProjector.createEmpty();
 
-        assertThat(registeredCustomersProjector.projection().state().asList())
+        assertThat(registeredCustomersProjector.current().state().asList())
                 .isEmpty();
         assertThat(registeredCustomersProjector.flush().state().asList())
                 .isEmpty();
@@ -38,7 +38,7 @@ class NewRegisteredCustomersProjectorTest {
 
         var registeredCustomer = new RegisteredCustomer(
                 customerId, "Customer Name");
-        assertThat(registeredCustomersProjector.projection().state().asList())
+        assertThat(registeredCustomersProjector.current().state().asList())
                 .as("Expected the Projection Full State to have only the newly registered customer")
                 .containsExactly(registeredCustomer);
         Checkpointed<NewlyRegisteredCustomers> registeredCustomers = registeredCustomersProjector.flush();
@@ -62,7 +62,7 @@ class NewRegisteredCustomersProjectorTest {
 
         registeredCustomersProjector.handle(customerRegistered);
 
-        assertThat(registeredCustomersProjector.projection().state().asList())
+        assertThat(registeredCustomersProjector.current().state().asList())
                 .as("Expected Full Current State to have 2 Customers")
                 .extracting(RegisteredCustomer::customerId)
                 .containsExactly(fixture.existingCustomerId(), newCustomerId);

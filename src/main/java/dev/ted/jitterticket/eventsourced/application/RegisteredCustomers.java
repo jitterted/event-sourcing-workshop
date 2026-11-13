@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.StringJoiner;
 import java.util.stream.Stream;
 
-public class RegisteredCustomers implements ProjectionDelta {
+public class RegisteredCustomers implements ReadModelDelta {
     private final List<RegisteredCustomer> registeredCustomers = new ArrayList<>();
 
     public RegisteredCustomers() {

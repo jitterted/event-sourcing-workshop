@@ -24,7 +24,7 @@ Lab 0 shows two versions of `Concert`: the snapshot-persisted **ORM** version (`
 ## Other working docs
 
 - **[role-playing.md](role-playing.md)** — Role-playing game that teaches read models and processors.
-- **[migrate-scheduled-concerts-projector-checklist.md](migrate-scheduled-concerts-projector-checklist.md)**, **[migrate-concert-projectors-checklist.md](migrate-concert-projectors-checklist.md)** — Checklists for moving projectors onto `NewProjectionCoordinator`.
+- **[migrate-scheduled-concerts-projector-checklist.md](migrate-scheduled-concerts-projector-checklist.md)**, **[migrate-concert-projectors-checklist.md](migrate-concert-projectors-checklist.md)** — Checklists for moving projectors onto `DurableReadModel`.
 
 ## Suggested reading order
 
